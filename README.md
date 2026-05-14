@@ -50,11 +50,13 @@ BFF 健康检查：
 http://localhost:8030/api/health
 ```
 
+如果你的对话模型接口运行在本机，例如 `http://127.0.0.1:54209/v1`，Docker 版会自动转到宿主机入口访问。页面里的 API 地址仍可按本机地址填写，API Key 只保存在你的本地浏览器配置里。
+
 也可以直接使用 Docker：
 
 ```bash
 docker build -t xiakeman-ai-short-drama:latest .
-docker run -d --name xiakeman -p 8022:8022 -p 8030:8030 xiakeman-ai-short-drama:latest
+docker run -d --name xiakeman --add-host=host.docker.internal:host-gateway -p 8022:8022 -p 8030:8030 xiakeman-ai-short-drama:latest
 ```
 
 停止服务：

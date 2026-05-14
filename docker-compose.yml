@@ -10,3 +10,7 @@ services:
     environment:
       BFF_PORT: "8030"
       CORS_ORIGIN: "http://localhost:8022"
+      REWRITE_LOCALHOST_FOR_DOCKER: "true"
+      DOCKER_HOST_GATEWAY: "host.docker.internal"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
