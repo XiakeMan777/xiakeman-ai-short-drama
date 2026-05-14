@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+
+*.log
+*.tmp
+
+node_modules/
+dist/
+release/

@@ -1,0 +1,9 @@
+.git
+.github
+.env
+.env.*
+*.log
+*.tmp
+release
+software/*.zip
+software/*.exe

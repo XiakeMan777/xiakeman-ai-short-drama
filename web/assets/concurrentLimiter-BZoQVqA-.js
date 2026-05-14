@@ -1,0 +1,1 @@
+class t{running=0;queue=[];maxConcurrency;constructor(r){this.maxConcurrency=r}async run(r){this.running>=this.maxConcurrency&&await new Promise(n=>this.queue.push(n)),this.running++;try{return await r()}finally{this.running--;const n=this.queue.shift();n&&n()}}}export{t as C};

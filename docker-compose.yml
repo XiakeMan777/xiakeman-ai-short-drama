@@ -1,0 +1,12 @@
+services:
+  xiakeman:
+    build: .
+    image: xiakeman-ai-short-drama:latest
+    container_name: xiakeman
+    restart: unless-stopped
+    ports:
+      - "8022:8022"
+      - "8030:8030"
+    environment:
+      BFF_PORT: "8030"
+      CORS_ORIGIN: "http://localhost:8022"
