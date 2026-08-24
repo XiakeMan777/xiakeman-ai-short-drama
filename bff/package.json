@@ -3,7 +3,7 @@
   "version": "0.8.0-community.1",
   "private": true,
   "description": "Xiakeman BFF service for prompt protection, model proxying, and rendering.",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "engines": {
     "node": ">=20.19.0"
   },

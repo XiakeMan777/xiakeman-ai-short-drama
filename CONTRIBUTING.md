@@ -21,6 +21,8 @@
 3. 修改完成后执行本地检查。
 4. 在 Pull Request 中说明改了什么、为什么改、怎么验证。
 
+提交贡献即表示你有权提供这些内容，并同意你的贡献按本仓库当前的 [PolyForm Noncommercial License 1.0.0](LICENSE) 一并提供。
+
 ```powershell
 npm ci
 npm ci --prefix bff

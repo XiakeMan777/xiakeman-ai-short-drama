@@ -2,8 +2,8 @@
   "name": "xiakeman-community",
   "private": true,
   "version": "0.8.0-community.1",
-  "description": "Open-source AI workspace for turning stories and scripts into storyboards, images and videos.",
-  "license": "MIT",
+  "description": "Source-available AI workspace for turning stories and scripts into storyboards, images and videos.",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "main": "desktop/main.cjs",
   "type": "module",
   "engines": {
