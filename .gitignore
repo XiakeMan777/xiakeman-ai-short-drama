@@ -58,12 +58,12 @@ unused-files-archive-*/
 *.nupkg
 
 # Local voice/model packs and large media corpora
-voice_corpus/
-voice-corpus/
-voice-packs/
-voices/
-models/
-checkpoints/
+/voice_corpus/
+/voice-corpus/
+/voice-packs/
+/voices/
+/models/
+/checkpoints/
 *.onnx
 *.pt
 *.pth
