@@ -1,0 +1,14 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="miniBrandGradient" x1="20" y1="18" x2="106" y2="110" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF7A45"/>
+      <stop offset="0.5" stop-color="#F2387A"/>
+      <stop offset="1" stop-color="#6E35F7"/>
+    </linearGradient>
+  </defs>
+  <rect x="17" y="41" width="94" height="48" rx="12" stroke="url(#miniBrandGradient)" stroke-width="6"/>
+  <path d="M43 20C31.402 22.826 23 33.278 23 45C23 56.732 31.402 67.174 43 70C39.184 61.07 39.184 51.596 43 42.5C45.226 37.194 49.401 31.685 55.5 27.5C50.341 26.735 46.2 24.736 43 20Z" fill="url(#miniBrandGradient)"/>
+  <path d="M85 20C96.598 22.826 105 33.278 105 45C105 56.732 96.598 67.174 85 70C88.816 61.07 88.816 51.596 85 42.5C82.774 37.194 78.599 31.685 72.5 27.5C77.659 26.735 81.8 24.736 85 20Z" fill="url(#miniBrandGradient)"/>
+  <path d="M64 43L79 52L64 61L49 52L64 43Z" fill="url(#miniBrandGradient)"/>
+  <path d="M64 60C73.824 60 82.421 65.267 88 74C82.301 77.683 75.515 79.8 68 80.5V94L64 108L60 94V80.5C52.485 79.8 45.699 77.683 40 74C45.579 65.267 54.176 60 64 60Z" fill="url(#miniBrandGradient)"/>
+</svg>

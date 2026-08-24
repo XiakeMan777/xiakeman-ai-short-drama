@@ -1,0 +1,23 @@
+{
+  "name": "xiakeman-community-bff",
+  "version": "0.8.0-community.1",
+  "private": true,
+  "description": "Xiakeman BFF service for prompt protection, model proxying, and rendering.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=../.env server.js",
+    "dev": "node --env-file-if-exists=../.env --watch server.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1050.0",
+    "@aws-sdk/s3-request-presigner": "^3.1050.0",
+    "archiver": "^7.0.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "multer": "^2.1.1",
+    "pg": "^8.21.0"
+  }
+}
