@@ -1,39 +1,49 @@
-# Xiakeman Community
+# 虾客漫 Xiakeman
 
-Xiakeman Community 是虾客漫 2026-07-02 源码快照的脱敏社区版，面向本地或小范围部署的 AI 短剧、漫剧与视频制作。社区版不附带平台账号、API Key、积分余额、支付入口或私有上游服务，默认采用 BYOK（Bring Your Own Key）。
+<div align="center">
+  <img src="./public/brand/xiakeman-logo-tight.png" width="128" alt="虾客漫 Logo" />
+  <p><strong>把小说、剧本和故事想法，整理成角色、分镜、AI 图片和视频。</strong></p>
+  <p>适合个人创作者和小团队在自己的电脑上使用。</p>
+</div>
 
-当前版本：`0.8.0-community.1`。本文档按当前源码入口和本地构建结果编写，不沿用历史交接文档中的功能结论。
+## 这是什么
 
-## 当前可用能力
+虾客漫是一套开源的 AI 视频创作工作台。你可以从一段小说、剧本或故事梗概开始，逐步完成人物与场景整理、故事板、图片素材、视频片段和成片合成。
 
-- 主流程：脚本输入/小说改编 → 结构化分析 → 角色、场景、道具资产 → 提示词或故事板 → 批量视频 → 成片合成。
-- 独立工作台：图片、视频、节点画布和后台任务中心。
-- 自定义 API：对话、图片、视频和语音；音乐配置模型仍未在 UI 中开放。
-- 本地数据：IndexedDB 为主存储，localStorage 负责兼容和启动提示。
-- 社区交流：右上角“交流群”展示维护者提供的微信二维码；社区前台不提供虾客漫账号登录。
-- 使用量统计：保留 Google Analytics 页面访问统计，方便维护者了解实际使用人数；不会主动上报项目内容、模型配置或 API Key。
-- 可选部署：Web + BFF、Docker、Electron 桌面打包。
+这个版本不附送模型额度，也不要求注册虾客漫账号。对话、图片、视频和语音服务由你自己选择并填写 API，项目默认保存在当前浏览器里。
 
-每项能力的入口、依赖和完成状态见 [功能清单](docs/FEATURES.md)。
+## 能做什么
 
-## 运行要求
+- 小说改编、剧本整理和分集设计
+- 自动提取角色、场景、道具和分镜
+- 生成人物参考图、场景图和故事板
+- 批量生成视频片段并查看任务进度
+- 添加原声、音效和 BGM，合成并导出成片
+- 使用独立的图片工作台、视频工作台和节点画布
+- 导入、导出项目，方便备份或换电脑继续制作
 
-- Node.js `20.19+`
-- npm
-- FFmpeg 和 ffprobe：仅音视频转换、渲染与成片导出需要
-- 可访问的模型服务：项目不包含任何可用密钥
+不同功能需要不同的模型服务。想先看看自己需要准备什么，可以阅读 [功能说明](docs/FEATURES.md)。
 
-## 仓库体积与外部资源
+## 三步开始使用
 
-GitHub 仓库只发布可复现构建所需的源码、锁文件、模板、正式 Logo 和交流群图片，不提交以下本地或生成内容：
+### 1. 准备 Node.js
 
-- `node_modules`、构建输出、桌面安装包和发布压缩包；
-- 语音语料库、语音包、本地模型、模型权重和检查点；
-- 运行数据库、日志、用户项目、生成媒体和本地环境变量。
+安装 [Node.js 20.19 或更高版本](https://nodejs.org/)。
 
-依赖请通过 `npm ci` 安装；FFmpeg、模型服务和语音资源由使用者按实际需要自行配置。
+### 2. 下载并启动
 
-## 本地启动
+```powershell
+git clone https://github.com/XiakeMan777/xiakeman-ai-short-drama.git
+cd xiakeman-ai-short-drama
+```
+
+Windows 用户可以直接双击 `start.bat`。第一次启动会自动安装依赖，完成后打开：
+
+```text
+http://localhost:8022
+```
+
+也可以手动启动：
 
 ```powershell
 npm ci
@@ -42,63 +52,72 @@ Copy-Item .env.example .env
 npm run dev:bff
 ```
 
-另开一个终端：
+再打开一个终端运行：
 
 ```powershell
 npm run dev
 ```
 
-默认地址：
+### 3. 填写自己的 API
 
-- 前端：`http://localhost:8022`
-- BFF：`http://localhost:8030`
-- 健康检查：`http://localhost:8030/api/health`
+进入页面后，点击右上角的“API 设置”：
 
-Windows 也可以直接运行 `start.bat`。它只在依赖目录不存在时安装依赖，并分别启动 BFF 与 Vite。
+1. 先配置对话模型，用来改编、分析和生成提示词。
+2. 需要 AI 出图时，再配置图片模型。
+3. 需要生成视频时，选择并配置对应的视频服务。
+4. 需要语音、音效或转写时，再补充语音服务。
 
-## 配置自己的模型
+建议先用低额度 Key 做一次小测试，确认连接正常后再批量生成。详细填写方法见 [API 配置指南](docs/API_CONFIGURATION.md)。
 
-打开页面右上角“API 设置”：
+## 项目保存在哪里
 
-1. 对话模型填写兼容 OpenAI Chat Completions 的服务地址、Key 和模型名。
-2. 图片模型按服务协议填写地址、Key、模型和默认尺寸。
-3. 视频模型选择本地 Seedance、Seedance 兼容服务、小云雀 Agent、火山方舟或阿里云百炼。
-4. 语音模型填写兼容当前 MiMo TTS 调用格式的地址、Key 和模型。
-5. 保存后先执行小请求；不要直接用高成本模型批量生成。
+项目和 API 设置默认保存在当前浏览器，不会自动同步到虾客漫服务器。请定期使用项目里的导出功能保存备份；清理浏览器数据、重装系统或更换浏览器，都可能让未导出的本地项目丢失。
 
-设置只保存在当前浏览器。Canvas 工作台还有独立的“画布设置”，两套配置不会自动互相覆盖。完整说明见 [API 配置](docs/API_CONFIGURATION.md)。
+API Key 会保存在当前浏览器中，不要在网吧、公共电脑或不可信设备上保存私人密钥。
 
-## 构建与检查
+## 常见问题
 
-```powershell
-npm run encoding:check
-npm run build
-npm audit
-npm audit --prefix bff
-```
+### 为什么点生成后提示没有 API Key？
 
-BFF 变更至少还应启动服务并请求 `GET /api/health`。本快照没有保留历史测试脚本，不能把“构建通过”写成“所有业务路径已自动测试”。
+开源版不包含共享密钥或免费额度，需要先在“API 设置”中填写你自己的服务。不同厂商的地址、模型名和返回格式可能不同，第一次请用小任务测试。
 
-## Docker
+### 为什么主工作流配置好了，节点画布仍提示未配置？
 
-```powershell
-npm run docker:prepare
-docker build -t xiakeman-community .
-docker run --rm -p 8080:80 -v xiakeman-data:/data xiakeman-community
-```
+主工作流和节点画布使用两套独立设置。进入画布后，再打开一次“画布设置”并选择对应的模型。
 
-访问 `http://localhost:8080`。公网部署前必须设置稳定的加密密钥、安全 Cookie、明确的 CORS 来源和各类上游地址白名单，详见 [部署说明](docs/DEPLOYMENT.md)。
+### 一定要安装 FFmpeg 吗？
 
-## 文档导航
+只做文本、图片或调用外部视频 API 时不一定需要。合成成片、音视频转换和部分导出功能需要 FFmpeg 与 ffprobe。
 
-- [功能清单](docs/FEATURES.md)：源码已接入、条件可用和未开放功能
-- [架构说明](docs/ARCHITECTURE.md)：入口、状态、BFF、后台任务与部署结构
-- [API 配置](docs/API_CONFIGURATION.md)：BYOK、本地保存、协议和安全边界
-- [HTTP API](docs/HTTP_API.md)：当前 BFF 路由总览
-- [部署说明](docs/DEPLOYMENT.md)：本地、Docker、数据目录与生产配置
-- [已知限制](docs/KNOWN_LIMITATIONS.md)：此快照不应被误解为已商业化产品的部分
-- [安全策略](SECURITY.md) 与 [脱敏记录](OPEN_SOURCE_SANITIZATION.md)
+### 为什么没有登录按钮？
+
+这个开源版采用本地使用方式，不需要注册或登录。项目跨设备迁移请使用导入、导出功能。
+
+### 在哪里反馈问题？
+
+页面右上角保留了“交流群”入口，也可以在 GitHub 提交 Issue。提交问题时请说明操作步骤和报错信息，但不要公开 API Key、私人素材或账号信息。
+
+### 会统计哪些数据？
+
+项目保留 Google Analytics 页面访问统计，帮助维护者了解有多少人在使用。项目内容、模型配置和 API Key 不会作为统计内容主动发送。
+
+## 更多说明
+
+面向使用者：
+
+- [功能说明](docs/FEATURES.md)
+- [API 配置指南](docs/API_CONFIGURATION.md)
+- [部署指南](docs/DEPLOYMENT.md)
+- [使用前先了解](docs/KNOWN_LIMITATIONS.md)
+- [版本说明](docs/RELEASE_NOTES.md)
+
+面向开发者：
+
+- [项目架构](docs/ARCHITECTURE.md)
+- [BFF HTTP API](docs/HTTP_API.md)
+- [参与贡献](CONTRIBUTING.md)
+- [安全说明](SECURITY.md)
 
 ## 许可证
 
-代码按 [MIT License](LICENSE) 发布。第三方模型、素材和外部服务仍受各自许可与服务条款约束。
+本项目使用 [MIT License](LICENSE)。你调用的第三方模型、上传的素材和生成的内容，还需要遵守对应服务商与素材来源的许可规则。

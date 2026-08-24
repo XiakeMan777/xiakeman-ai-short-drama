@@ -2,7 +2,7 @@
   "name": "xiakeman-community",
   "private": true,
   "version": "0.8.0-community.1",
-  "description": "Sanitized BYOK community edition of the Xiakeman AI production workspace.",
+  "description": "Open-source AI workspace for turning stories and scripts into storyboards, images and videos.",
   "license": "MIT",
   "main": "desktop/main.cjs",
   "type": "module",
