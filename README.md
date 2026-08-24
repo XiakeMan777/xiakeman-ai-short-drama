@@ -1,97 +1,104 @@
-# 虾客漫 Xiakeman
+# Xiakeman Community
 
-虾客漫是一套面向 AI 漫剧、短剧和漫画视频生产的seedance2.0专用创作工作台，帮助创作者把点子、小说或剧本推进到角色资产、分镜提示词、视频生成、配音字幕和成片合成。
+Xiakeman Community 是虾客漫 2026-07-02 源码快照的脱敏社区版，面向本地或小范围部署的 AI 短剧、漫剧与视频制作。社区版不附带平台账号、API Key、积分余额、支付入口或私有上游服务，默认采用 BYOK（Bring Your Own Key）。
 
-在线体验：<https://xiakeman.com/>
+当前版本：`0.8.0-community.1`。本文档按当前源码入口和本地构建结果编写，不沿用历史交接文档中的功能结论。
 
-## 适合谁
+## 当前可用能力
 
-- 短剧、漫剧、漫画视频创作者。
-- 需要批量整理分镜、提示词、角色资产和镜头方案的团队。
-- 想把 AI 视频生成流程做成稳定流水线的工作室。
-- 想先本地部署试用，再接入自己模型和素材流程的开发/运营团队。
+- 主流程：脚本输入/小说改编 → 结构化分析 → 角色、场景、道具资产 → 提示词或故事板 → 批量视频 → 成片合成。
+- 独立工作台：图片、视频、节点画布和后台任务中心。
+- 自定义 API：对话、图片、视频和语音；音乐配置模型仍未在 UI 中开放。
+- 本地数据：IndexedDB 为主存储，localStorage 负责兼容和启动提示。
+- 社区交流：右上角“交流群”展示维护者提供的微信二维码；社区前台不提供虾客漫账号登录。
+- 使用量统计：保留 Google Analytics 页面访问统计，方便维护者了解实际使用人数；不会主动上报项目内容、模型配置或 API Key。
+- 可选部署：Web + BFF、Docker、Electron 桌面打包。
 
-## 核心能力
+每项能力的入口、依赖和完成状态见 [功能清单](docs/FEATURES.md)。
 
-- 剧本整理：把小说、点子或标注剧本整理为结构化生产素材。
-- 角色资产：管理角色、场景、服装、道具和一致性引用。
-- 分镜设计：生成镜头拆解、故事板、Shot Sheet 和视频提示词。
-- 视频生成：对接本地或云端视频模型服务，支持批量任务流程。
-- 配音字幕：整理台词、声线参考、TTS、字幕、音效和 BGM。
-- 本地合成：通过 FFmpeg/ffprobe 生成成片素材包。
+## 运行要求
 
-## 使用方式
+- Node.js `20.19+`
+- npm
+- FFmpeg 和 ffprobe：仅音视频转换、渲染与成片导出需要
+- 可访问的模型服务：项目不包含任何可用密钥
 
-### 在线版
+## 仓库体积与外部资源
 
-推荐先体验在线版本：
+GitHub 仓库只发布可复现构建所需的源码、锁文件、模板、正式 Logo 和交流群图片，不提交以下本地或生成内容：
 
-<https://xiakeman.com/>
+- `node_modules`、构建输出、桌面安装包和发布压缩包；
+- 语音语料库、语音包、本地模型、模型权重和检查点；
+- 运行数据库、日志、用户项目、生成媒体和本地环境变量。
 
-在线版更新最快，适合直接体验产品流程、演示能力和持续使用。
+依赖请通过 `npm ci` 安装；FFmpeg、模型服务和语音资源由使用者按实际需要自行配置。
 
-### Docker 部署版
+## 本地启动
 
-适合本地服务器、内网环境或私有演示环境。
-
-```bash
-docker compose up -d --build
+```powershell
+npm ci
+npm ci --prefix bff
+Copy-Item .env.example .env
+npm run dev:bff
 ```
 
-启动后打开：
+另开一个终端：
 
-```text
-http://localhost:8022
+```powershell
+npm run dev
 ```
 
-BFF 健康检查：
+默认地址：
 
-```text
-http://localhost:8030/api/health
+- 前端：`http://localhost:8022`
+- BFF：`http://localhost:8030`
+- 健康检查：`http://localhost:8030/api/health`
+
+Windows 也可以直接运行 `start.bat`。它只在依赖目录不存在时安装依赖，并分别启动 BFF 与 Vite。
+
+## 配置自己的模型
+
+打开页面右上角“API 设置”：
+
+1. 对话模型填写兼容 OpenAI Chat Completions 的服务地址、Key 和模型名。
+2. 图片模型按服务协议填写地址、Key、模型和默认尺寸。
+3. 视频模型选择本地 Seedance、Seedance 兼容服务、小云雀 Agent、火山方舟或阿里云百炼。
+4. 语音模型填写兼容当前 MiMo TTS 调用格式的地址、Key 和模型。
+5. 保存后先执行小请求；不要直接用高成本模型批量生成。
+
+设置只保存在当前浏览器。Canvas 工作台还有独立的“画布设置”，两套配置不会自动互相覆盖。完整说明见 [API 配置](docs/API_CONFIGURATION.md)。
+
+## 构建与检查
+
+```powershell
+npm run encoding:check
+npm run build
+npm audit
+npm audit --prefix bff
 ```
 
-如果你的对话模型接口运行在本机，例如 `http://127.0.0.1:54209/v1`，Docker 版会自动转到宿主机入口访问。页面里的 API 地址仍可按本机地址填写，API Key 只保存在你的本地浏览器配置里。
+BFF 变更至少还应启动服务并请求 `GET /api/health`。本快照没有保留历史测试脚本，不能把“构建通过”写成“所有业务路径已自动测试”。
 
-也可以直接使用 Docker：
+## Docker
 
-```bash
-docker build -t xiakeman-ai-short-drama:latest .
-docker run -d --name xiakeman --add-host=host.docker.internal:host-gateway -p 8022:8022 -p 8030:8030 xiakeman-ai-short-drama:latest
+```powershell
+npm run docker:prepare
+docker build -t xiakeman-community .
+docker run --rm -p 8080:80 -v xiakeman-data:/data xiakeman-community
 ```
 
-停止服务：
+访问 `http://localhost:8080`。公网部署前必须设置稳定的加密密钥、安全 Cookie、明确的 CORS 来源和各类上游地址白名单，详见 [部署说明](docs/DEPLOYMENT.md)。
 
-```bash
-docker stop xiakeman
-docker rm xiakeman
-```
+## 文档导航
 
-### Windows 桌面版
+- [功能清单](docs/FEATURES.md)：源码已接入、条件可用和未开放功能
+- [架构说明](docs/ARCHITECTURE.md)：入口、状态、BFF、后台任务与部署结构
+- [API 配置](docs/API_CONFIGURATION.md)：BYOK、本地保存、协议和安全边界
+- [HTTP API](docs/HTTP_API.md)：当前 BFF 路由总览
+- [部署说明](docs/DEPLOYMENT.md)：本地、Docker、数据目录与生产配置
+- [已知限制](docs/KNOWN_LIMITATIONS.md)：此快照不应被误解为已商业化产品的部分
+- [安全策略](SECURITY.md) 与 [脱敏记录](OPEN_SOURCE_SANITIZATION.md)
 
-Windows 桌面软件版请到 [GitHub Releases](https://github.com/XiakeMan777/xiakeman-ai-short-drama/releases) 下载。
+## 许可证
 
-推荐下载文件夹版：
-
-- `Xiakeman-0.3.3-win-x64-folder.zip`
-- SHA256：`64AF835E65890483D5D60E1AEAD8C45902AE39593E4524C7DD20FB6FF3D78359`
-
-如果安全软件对单文件 exe 有误报，请优先使用文件夹版 zip。解压后运行里面的 `Xiakeman.exe`。
-
-## 仓库内容
-
-这个仓库提供可部署的运行包和发布说明，方便快速体验虾客漫。
-
-- `web/`：网页应用运行文件。
-- `server/`：本地服务运行文件。
-- `voice_corpus/`：声线样本占位目录，默认不内置样本。
-- `software/`：桌面软件版下载说明和校验信息。
-- `Dockerfile`：Docker 镜像构建文件。
-- `docker-compose.yml`：Docker Compose 启动配置。
-- `nginx.conf`：容器内页面和接口转发配置。
-- `start.sh`：容器启动脚本。
-
-## 授权
-
-本仓库内容保留所有权利。未经书面许可，不得复制、修改、二次分发、反编译、逆向工程或基于本发布包制作衍生产品。
-
-商业合作、在线体验和最新版本请访问：<https://xiakeman.com/>
+代码按 [MIT License](LICENSE) 发布。第三方模型、素材和外部服务仍受各自许可与服务条款约束。

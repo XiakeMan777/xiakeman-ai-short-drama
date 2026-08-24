@@ -1,15 +1,9 @@
 * text=auto
 
 *.sh text eol=lf
-*.yml text eol=lf
-*.yaml text eol=lf
-*.md text eol=lf
-*.json text eol=lf
-*.csv text eol=lf
-*.html text eol=lf
-*.css text eol=lf
-*.js text eol=lf
-*.cjs text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
 
 *.png binary
 *.jpg binary
@@ -17,5 +11,7 @@
 *.webp binary
 *.gif binary
 *.ico binary
+*.mp4 binary
+*.wav binary
+*.mp3 binary
 *.zip binary
-*.exe binary

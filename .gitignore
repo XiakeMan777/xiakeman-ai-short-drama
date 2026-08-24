@@ -1,10 +1,83 @@
+# Dependencies
+node_modules/
+bff/node_modules/
+
+# Build output
+dist/
+build/
+coverage/
+release/
+.desktop-package/
+.docker-bff/
+
+# Local environment and secrets
 .env
 .env.*
 !.env.example
+.xiakeman-agent-cookies.txt
+*.pem
+*.key
+*.pfx
+*.p12
 
+# Local runtime output
 *.log
 *.tmp
+*.db
+*.sqlite
+*.sqlite3
+data/
+bff/data/
+*.zip
+deploy/
+.deploy-package/
+.deploy-runtime/
+.playwright-cli/
+.runtime-test/
+output/
+stable-backups/
+unused-files-archive-*/
 
-node_modules/
-dist/
-release/
+# Generated installers and release archives
+*.exe
+*.msi
+*.msix
+*.appx
+*.appxbundle
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.AppImage
+*.iso
+*.7z
+*.rar
+*.tar
+*.tar.gz
+*.tgz
+*.nupkg
+
+# Local voice/model packs and large media corpora
+voice_corpus/
+voice-corpus/
+voice-packs/
+voices/
+models/
+checkpoints/
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.gguf
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.ogg
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

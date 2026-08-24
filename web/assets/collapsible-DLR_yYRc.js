@@ -1,1 +1,0 @@
-import{j as o}from"./vendor-react-FitHiPMq.js";import{z as t,A as s,B as a}from"./vendor-ui-CZDRnXZi.js";function i({...l}){return o.jsx(t,{"data-slot":"collapsible",...l})}function n({...l}){return o.jsx(s,{"data-slot":"collapsible-trigger",...l})}function p({...l}){return o.jsx(a,{"data-slot":"collapsible-content",...l})}export{i as C,n as a,p as b};
