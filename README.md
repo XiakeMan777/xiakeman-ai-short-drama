@@ -4,7 +4,10 @@
   <img src="./public/brand/xiakeman-logo-tight.png" width="128" alt="虾客漫 Logo" />
   <p><strong>把小说、剧本和故事想法，整理成角色、分镜、AI 图片和视频。</strong></p>
   <p>适合个人创作者和小团队在自己的电脑上使用。</p>
+  <p><a href="https://xiakeman.com"><strong>在线预览：xiakeman.com</strong></a></p>
 </div>
+
+[![虾客漫首页预览](./docs/images/xiakeman-homepage.webp)](https://xiakeman.com)
 
 ## 这是什么
 
