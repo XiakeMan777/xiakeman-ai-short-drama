@@ -146,10 +146,11 @@ function buildGenerateUserPrompt(data) {
   const imageRefText = imageRefs.map(formatImageReferenceLine).join('\n');
   const outfitRefNote = buildOutfitReferenceInstruction(imageRefs, '生成提示词时');
   const visualCharacterRefNote = buildVisualCharacterReferenceInstruction(imageRefs, '生成提示词时');
-  const videoImageBudgetNote = buildVideoImageBudgetInstruction(imageRefs);
+  const maxImageReferences = data.maxImageReferences;
+  const videoImageBudgetNote = buildVideoImageBudgetInstruction(imageRefs, maxImageReferences);
   const propRefs = imageRefs.filter((r) => r.type === 'prop');
-  const propRefNote = buildPropReferenceInstruction(propRefs, '生成提示词时');
-  const seedanceRefRoleNote = buildSeedanceReferenceRoleInstruction(imageRefs, '生成提示词时');
+  const propRefNote = buildPropReferenceInstruction(propRefs, '生成提示词时', maxImageReferences);
+  const seedanceRefRoleNote = buildSeedanceReferenceRoleInstruction(imageRefs, '生成提示词时', maxImageReferences);
   const prevInfo = prevLastFrameInfo
     ? `\n\n## 上一分镜落幅画面信息（用于衔接）\n${prevLastFrameInfo}\n→ 请确保本分镜开场与上一分镜落幅之间视觉过渡自然\n→ ⚠️ 禁止使用"承接上一镜""续上一镜"等模糊引用词，必须将上一分镜落幅的具体状态（肢体位置、道具持有、朝向）显式重写为本分镜开场描述的一部分`
     : '';
@@ -328,10 +329,11 @@ function buildGenerateWithChoreographyPrompt(data) {
   const imageRefText = imageRefs.map(formatImageReferenceLine).join('\n');
   const outfitRefNote = buildOutfitReferenceInstruction(imageRefs, '最终提示词写作时');
   const visualCharacterRefNote = buildVisualCharacterReferenceInstruction(imageRefs, '最终提示词写作时');
-  const videoImageBudgetNote = buildVideoImageBudgetInstruction(imageRefs);
+  const maxImageReferences = data.maxImageReferences;
+  const videoImageBudgetNote = buildVideoImageBudgetInstruction(imageRefs, maxImageReferences);
   const propRefs = imageRefs.filter((r) => r.type === 'prop');
-  const propRefNote = buildPropReferenceInstruction(propRefs, '最终提示词写作时');
-  const seedanceRefRoleNote = buildSeedanceReferenceRoleInstruction(imageRefs, '最终提示词写作时');
+  const propRefNote = buildPropReferenceInstruction(propRefs, '最终提示词写作时', maxImageReferences);
+  const seedanceRefRoleNote = buildSeedanceReferenceRoleInstruction(imageRefs, '最终提示词写作时', maxImageReferences);
   const prevInfo = prevLastFrameInfo
     ? `\n\n## 上一分镜落幅画面信息（用于衔接）\n${prevLastFrameInfo}\n→ 请确保本分镜开场与上一分镜落幅之间视觉过渡自然\n→ ⚠️ 禁止使用"承接上一镜""续上一镜"等模糊引用词，必须将上一分镜落幅的具体状态（肢体位置、道具持有、朝向）显式重写为本分镜开场描述的一部分`
     : '';

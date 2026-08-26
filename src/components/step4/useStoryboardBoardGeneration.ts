@@ -56,6 +56,7 @@ import { resolveStoryboardProjectVisualStyle } from '@/lib/projectVisualStyle';
 import { DEFAULT_STORYBOARD_DIRECTOR_RUN_MODE } from '@/lib/storage';
 import { getLockedSmartStoryboardPanelCount, normalizeSmartStoryboardPanelCountPreference } from '@/lib/smartStoryboardPanelCount';
 import { resolveStoryboardCameraSegmentCount } from '@/lib/storyboardCameraSegments';
+import { getVideoImageReferenceLimit } from '@/lib/volcengineVideoModels';
 import {
   formatStoryboardBoardReferenceLabel,
   resolveStoryboardBoardReferences,
@@ -726,8 +727,9 @@ export function useStoryboardBoardGeneration(
       frameRatio: targetVideoFrameRatio,
       projectVisualStyle,
       cameraSegmentCount,
+      maxImageReferences: getVideoImageReferenceLimit(state.videoApiConfig),
     }),
-    [boardState?.plan, currentSb, lockedSmartPanelCount, modeConfig.mode, projectVisualStyle, seedanceFinalPromptReferences, seedanceFinalPromptVoiceReferences, smartDurationCompressionEnabled, targetVideoFrameRatio],
+    [boardState?.plan, cameraSegmentCount, currentSb, lockedSmartPanelCount, modeConfig.mode, projectVisualStyle, seedanceFinalPromptReferences, seedanceFinalPromptVoiceReferences, smartDurationCompressionEnabled, state.videoApiConfig, targetVideoFrameRatio],
   );
 
   const seedanceFinalPromptState = useMemo(
@@ -1147,6 +1149,7 @@ export function useStoryboardBoardGeneration(
             undefined,
             smartPanelCountPreference,
             cameraSegmentCount,
+            { maxImageReferences: getVideoImageReferenceLimit(state.videoApiConfig) },
           ),
           STORYBOARD_DIRECTOR_BRIEF_TEMPLATE_TYPE,
           STORYBOARD_DIRECTOR_BRIEF_LLM_PARAMS,
@@ -1166,6 +1169,7 @@ export function useStoryboardBoardGeneration(
                 firstBriefParseError instanceof Error ? firstBriefParseError.message : String(firstBriefParseError),
                 smartPanelCountPreference,
                 cameraSegmentCount,
+                { maxImageReferences: getVideoImageReferenceLimit(state.videoApiConfig) },
             ),
             STORYBOARD_DIRECTOR_BRIEF_TEMPLATE_TYPE,
             STORYBOARD_DIRECTOR_BRIEF_REPAIR_LLM_PARAMS,
@@ -1192,6 +1196,7 @@ export function useStoryboardBoardGeneration(
               durationRejudgeHint,
               smartPanelCountPreference,
               cameraSegmentCount,
+              { maxImageReferences: getVideoImageReferenceLimit(state.videoApiConfig) },
             ),
             STORYBOARD_DIRECTOR_BRIEF_TEMPLATE_TYPE,
             STORYBOARD_DIRECTOR_BRIEF_REPAIR_LLM_PARAMS,
@@ -1232,7 +1237,10 @@ export function useStoryboardBoardGeneration(
         analysis?.styleConfig,
         smartPanelCountPreference,
         cameraSegmentCount,
-        { compactPlanning },
+        {
+          compactPlanning,
+          maxImageReferences: getVideoImageReferenceLimit(state.videoApiConfig),
+        },
       );
       const buildFormatRepairText = (previousRawText: string, repairHint: string) => buildStoryboardBoardFormatRepairRequest(
         planningStoryboardForPlan,
@@ -1247,7 +1255,10 @@ export function useStoryboardBoardGeneration(
         analysis?.styleConfig,
         smartPanelCountPreference,
         cameraSegmentCount,
-        { compactPlanning },
+        {
+          compactPlanning,
+          maxImageReferences: getVideoImageReferenceLimit(state.videoApiConfig),
+        },
       );
       const buildQualityRepairText = (currentPlan: StoryboardBoardPlan, repairHint: string) => buildStoryboardBoardQualityRepairRequest(
         planningStoryboardForPlan,
@@ -1262,7 +1273,10 @@ export function useStoryboardBoardGeneration(
         analysis?.styleConfig,
         smartPanelCountPreference,
         cameraSegmentCount,
-        { compactPlanning },
+        {
+          compactPlanning,
+          maxImageReferences: getVideoImageReferenceLimit(state.videoApiConfig),
+        },
       );
 
       let rawPlanText = await requestPlanningText(
@@ -1362,6 +1376,7 @@ export function useStoryboardBoardGeneration(
               analysis?.styleConfig,
               smartPanelCountPreference,
               cameraSegmentCount,
+              { maxImageReferences: getVideoImageReferenceLimit(state.videoApiConfig) },
             ),
             STORYBOARD_ACTION_DIRECTOR_TEMPLATE_TYPE,
             STORYBOARD_ACTION_DIRECTOR_LLM_PARAMS,
@@ -1442,6 +1457,7 @@ export function useStoryboardBoardGeneration(
     analysis?.styleConfig,
     boardContainer,
     boardState?.generationTiming,
+    cameraSegmentCount,
     currentChapter?.id,
     currentIndex,
     currentProject?.id,
@@ -1460,6 +1476,7 @@ export function useStoryboardBoardGeneration(
     smartPanelCountPreference,
     state.apiConfig,
     state.globalTaskSettings?.step4LlmExecutionMode,
+    state.videoApiConfig,
     storyboardBoardImageSize,
     storyboardDirectorRunMode,
     targetVideoFrameRatio,
@@ -1561,6 +1578,7 @@ export function useStoryboardBoardGeneration(
       frameRatio: targetVideoFrameRatio,
       projectVisualStyle: boardProjectVisualStyle,
       cameraSegmentCount,
+      maxImageReferences: getVideoImageReferenceLimit(state.videoApiConfig),
     });
 
     const boardGenerationStartedAt = Date.now();
@@ -1855,6 +1873,7 @@ export function useStoryboardBoardGeneration(
           frameRatio: targetVideoFrameRatio,
           projectVisualStyle: boardProjectVisualStyle,
           cameraSegmentCount,
+          maxImageReferences: getVideoImageReferenceLimit(state.videoApiConfig),
         }, (requestPayload, requestOptions, streamCallbacks) => requestSeedanceFinalPromptViaBffStream(
           requestPayload,
           requestOptions,
@@ -2001,12 +2020,14 @@ export function useStoryboardBoardGeneration(
     boardContainer,
     boardState,
     boardStyle,
+    cameraSegmentCount,
     currentChapter?.id,
     currentIndex,
     currentProject,
     currentSb,
     currentSbForPlanning,
     dispatch,
+    expectedImageRefs,
     generateDisabledReason,
     hasBoardSource,
     hasFreshPlan,
@@ -2086,6 +2107,7 @@ export function useStoryboardBoardGeneration(
       frameRatio: targetVideoFrameRatio,
       projectVisualStyle: buildBoardProjectVisualStyle(storyboardForPrompt, boardPlan, analysis?.styleConfig),
       cameraSegmentCount,
+      maxImageReferences: getVideoImageReferenceLimit(state.videoApiConfig),
     });
     const seedanceStartedAt = Date.now();
     const seedancePromptTiming = beginStoryboardBoardSeedanceTiming(
@@ -2184,6 +2206,7 @@ export function useStoryboardBoardGeneration(
           frameRatio: targetVideoFrameRatio,
           projectVisualStyle: buildBoardProjectVisualStyle(storyboardForPrompt, boardPlan, analysis?.styleConfig),
           cameraSegmentCount,
+          maxImageReferences: getVideoImageReferenceLimit(state.videoApiConfig),
         }, (requestPayload, requestOptions, streamCallbacks) => requestSeedanceFinalPromptViaBffStream(
           requestPayload,
           requestOptions,
@@ -2264,11 +2287,13 @@ export function useStoryboardBoardGeneration(
     baseUsedReferences,
     boardContainer,
     boardState,
+    cameraSegmentCount,
     currentChapter?.id,
     currentIndex,
     currentProject,
     currentSb,
     dispatch,
+    expectedImageRefs,
     lockedSmartPanelCount,
     modeConfig.mode,
     smartDurationCompressionEnabled,
@@ -2346,6 +2371,7 @@ export function useStoryboardBoardGeneration(
       frameRatio: modeConfig.frameRatio,
       projectVisualStyle: buildBoardProjectVisualStyle(currentSb, plan, analysis?.styleConfig),
       cameraSegmentCount,
+      maxImageReferences: getVideoImageReferenceLimit(state.videoApiConfig),
     });
 
     const blobKey = await saveBlob(importedBlob);
@@ -2429,11 +2455,13 @@ export function useStoryboardBoardGeneration(
     boardState?.planError,
     boardState?.planGeneratedAt,
     boardStyle,
+    cameraSegmentCount,
     currentChapter?.id,
     currentIndex,
     currentProject,
     currentSb,
     dispatch,
+    expectedImageRefs,
     generateSeedanceFinalVideoPrompt,
     hasFreshPlan,
     isDirectorMode,

@@ -41,6 +41,7 @@ import {
   type ResolvedStoryboardVoiceReference,
 } from '@/lib/characterVoiceReferences';
 import { getStoryboardVideoImageRefs } from './videoImageRefs';
+import { getVideoImageReferenceLimit } from '@/lib/volcengineVideoModels';
 
 export const SEEDANCE_FINAL_PROMPT_MISSING_MESSAGE =
   'Seedance 最终视频提示词未生成，请先回 Step4 生成。';
@@ -54,7 +55,7 @@ export interface VideoSubmissionReadinessInput {
   analysis?: ScriptAnalysis | null;
   assetLibrary?: Asset[];
   project?: Pick<Project, 'characterVoiceReferences'> | null;
-  videoConfig?: Pick<VideoApiConfig, 'backend' | 'characterVoiceReferencesEnabled'>;
+  videoConfig?: Pick<VideoApiConfig, 'backend' | 'volcModel' | 'characterVoiceReferencesEnabled'>;
   storyboardIndex: number;
   videoRatio: string;
   imageRefs?: ImageReference[];
@@ -139,6 +140,7 @@ export function buildSeedanceFinalPromptSubmissionContext(
   const selectedVariant = getStoryboardBoardVariant(storyboard.storyboardBoard, mode);
   const imageRefs = resolveSubmissionImageRefs(input);
   const references = buildSeedancePromptReferences(imageRefs, assetLibrary, selectedVariant?.plan);
+  const imageReferenceLimit = getVideoImageReferenceLimit(input.videoConfig);
   const voiceReferences = input.videoConfig
     ? resolveStoryboardVoiceReferences({
         storyboard,
@@ -153,6 +155,7 @@ export function buildSeedanceFinalPromptSubmissionContext(
     voiceReferences,
     mode,
     frameRatio: videoRatio,
+    maxImageReferences: imageReferenceLimit,
   });
 
   return {
@@ -222,6 +225,7 @@ export function getStoryboardVideoSubmissionReadiness(input: VideoSubmissionRead
   }
 
   const storyboardBoardReference = resolveStoryboardBoardVideoReferenceState(storyboard);
+  const imageReferenceLimit = getVideoImageReferenceLimit(input.videoConfig);
   if (storyboardBoardReference.enabled && !storyboardBoardReference.available) {
     return {
       ready: false,
@@ -239,6 +243,7 @@ export function getStoryboardVideoSubmissionReadiness(input: VideoSubmissionRead
       includeScenePositionBoard: false,
       useStoryboardBoardReferencePack: true,
       finalVideoPrompt: step4Prompt,
+      imageReferenceLimit,
     },
   );
 
@@ -250,7 +255,7 @@ export function getStoryboardVideoSubmissionReadiness(input: VideoSubmissionRead
   }
 
   if (resolution.exceedsLimit) {
-    return { ready: false, reason: buildVideoReferenceLimitMessage(resolution.totalRefs) };
+    return { ready: false, reason: buildVideoReferenceLimitMessage(resolution.totalRefs, imageReferenceLimit) };
   }
 
   if (resolution.missing.length > 0) {
@@ -291,7 +296,11 @@ export function getStoryboardVideoSubmissionReadiness(input: VideoSubmissionRead
     return { ready: false, reason: promptLengthValidation.reason ?? 'Step5 视频提示词字数与 Step4 不一致，请人工确认后再提交。' };
   }
 
-  const promptReferenceBindingValidation = validateVideoPromptReferenceBindings(step5Prompt, resolution.effectiveItems);
+  const promptReferenceBindingValidation = validateVideoPromptReferenceBindings(
+    step5Prompt,
+    resolution.effectiveItems,
+    imageReferenceLimit,
+  );
   if (!promptReferenceBindingValidation.valid) {
     return {
       ready: false,

@@ -62,7 +62,8 @@ import { selectPrimaryStoryboardSourceText } from './storyboardSourceSelection';
 import { augmentStoryboardCharactersFromText } from './storyboardCharacterAugment';
 import { computeImageRefs } from './storyboardImageRefs';
 import { findMatchingImageRef } from './storyboardReferenceResolver';
-import { STEP4_VIDEO_IMAGE_REFERENCE_LIMIT, selectVideoImageRefs } from './videoImageBudget';
+import { selectVideoImageRefs } from './videoImageBudget';
+import { getVideoImageReferenceLimit } from '@/lib/volcengineVideoModels';
 import { sanitizeUnboundTemporaryRoleAliases } from './promptRoleAliasSanitizer';
 import { sanitizeMisboundImageReferenceLabels } from './promptImageRefSanitizer';
 import { extractLastFrameInfo, parsePromptFromRawText } from './storyboardPromptParsing';
@@ -1726,7 +1727,7 @@ export function useStoryboardGeneration() {
           storyboardIndex: index,
           propTracking: latestAnalysis.propTracking,
           assetLibrary: projectAssetLibrary,
-          maxRefs: STEP4_VIDEO_IMAGE_REFERENCE_LIMIT - 1,
+          maxRefs: Math.max(1, getVideoImageReferenceLimit(stateRef.current.videoApiConfig) - 1),
         });
         refs = videoImageSelection.selectedRefs;
         continuitySpatialBlocking = filterSpatialBlockingCharacters(
@@ -1939,6 +1940,7 @@ export function useStoryboardGeneration() {
                 latestAnalysis.styleConfig,
                 smartPanelCountPreference,
                 cameraSegmentCount,
+                { maxImageReferences: getVideoImageReferenceLimit(stateRef.current.videoApiConfig) },
               ),
             }], {
               templateType: STORYBOARD_ACTION_DIRECTOR_TEMPLATE_TYPE,
@@ -2085,6 +2087,7 @@ export function useStoryboardGeneration() {
                     undefined,
                     smartPanelCountPreference,
                     cameraSegmentCount,
+                    { maxImageReferences: getVideoImageReferenceLimit(stateRef.current.videoApiConfig) },
                   ),
                 }], {
                   templateType: STORYBOARD_DIRECTOR_BRIEF_TEMPLATE_TYPE,
@@ -2113,6 +2116,7 @@ export function useStoryboardGeneration() {
                       firstBriefParseError instanceof Error ? firstBriefParseError.message : String(firstBriefParseError),
                       smartPanelCountPreference,
                       cameraSegmentCount,
+                      { maxImageReferences: getVideoImageReferenceLimit(stateRef.current.videoApiConfig) },
                     ),
                   }], {
                     templateType: STORYBOARD_DIRECTOR_BRIEF_TEMPLATE_TYPE,
@@ -2148,6 +2152,7 @@ export function useStoryboardGeneration() {
                       durationRejudgeHint,
                       smartPanelCountPreference,
                       cameraSegmentCount,
+                      { maxImageReferences: getVideoImageReferenceLimit(stateRef.current.videoApiConfig) },
                     ),
                   }], {
                     templateType: STORYBOARD_DIRECTOR_BRIEF_TEMPLATE_TYPE,
@@ -2176,7 +2181,7 @@ export function useStoryboardGeneration() {
               storyboardIndex: index,
               propTracking: latestAnalysis.propTracking,
               assetLibrary: projectAssetLibrary,
-              maxRefs: STEP4_VIDEO_IMAGE_REFERENCE_LIMIT - 1,
+              maxRefs: Math.max(1, getVideoImageReferenceLimit(stateRef.current.videoApiConfig) - 1),
               directorBrief,
             });
             refreshStoryboardBoardReferenceContext(videoImageSelection.selectedRefs);
@@ -2254,7 +2259,10 @@ export function useStoryboardGeneration() {
                   latestAnalysis.styleConfig,
                   smartPanelCountPreference,
                   cameraSegmentCount,
-                  { compactPlanning },
+                  {
+                    compactPlanning,
+                    maxImageReferences: getVideoImageReferenceLimit(stateRef.current.videoApiConfig),
+                  },
                 ),
               }], {
                 templateType: planTemplateType,
@@ -2287,7 +2295,10 @@ export function useStoryboardGeneration() {
                       latestAnalysis.styleConfig,
                       smartPanelCountPreference,
                       cameraSegmentCount,
-                      { compactPlanning },
+                      {
+                        compactPlanning,
+                        maxImageReferences: getVideoImageReferenceLimit(stateRef.current.videoApiConfig),
+                      },
                     ),
                   }], {
                     templateType: planTemplateType,
@@ -2334,7 +2345,10 @@ export function useStoryboardGeneration() {
                       latestAnalysis.styleConfig,
                       smartPanelCountPreference,
                       cameraSegmentCount,
-                      { compactPlanning },
+                      {
+                        compactPlanning,
+                        maxImageReferences: getVideoImageReferenceLimit(stateRef.current.videoApiConfig),
+                      },
                     ),
                   }], {
                     templateType: planTemplateType,
@@ -2432,6 +2446,7 @@ export function useStoryboardGeneration() {
                       latestAnalysis.styleConfig,
                       smartPanelCountPreference,
                       cameraSegmentCount,
+                      { maxImageReferences: getVideoImageReferenceLimit(stateRef.current.videoApiConfig) },
                     ),
                   }], {
                     templateType: STORYBOARD_ACTION_DIRECTOR_TEMPLATE_TYPE,
@@ -2506,6 +2521,7 @@ export function useStoryboardGeneration() {
           frameRatio: targetVideoFrameRatio,
           projectVisualStyle,
           cameraSegmentCount,
+          maxImageReferences: getVideoImageReferenceLimit(stateRef.current.videoApiConfig),
         });
         const existingSeedanceFinalPromptState = getSeedanceFinalVideoPromptState(
           sb,
@@ -2812,6 +2828,7 @@ export function useStoryboardGeneration() {
               frameRatio: targetVideoFrameRatio,
               projectVisualStyle,
               cameraSegmentCount,
+              maxImageReferences: getVideoImageReferenceLimit(stateRef.current.videoApiConfig),
             }, (requestPayload, requestOptions, streamCallbacks) => requestSeedanceFinalPromptViaBffStream(
               requestPayload,
               requestOptions,
@@ -3255,6 +3272,7 @@ export function useStoryboardGeneration() {
             frameRatio: targetVideoFrameRatio,
             projectVisualStyle,
             cameraSegmentCount,
+            maxImageReferences: getVideoImageReferenceLimit(stateRef.current.videoApiConfig),
           }, (requestPayload, requestOptions, streamCallbacks) => requestSeedanceFinalPromptViaBffStream(
             requestPayload,
             requestOptions,
@@ -3416,6 +3434,7 @@ export function useStoryboardGeneration() {
         storyboardIndex: index,
         propTracking: latestAnalysis.propTracking,
         assetLibrary: projectAssetLibrary,
+        maxRefs: getVideoImageReferenceLimit(stateRef.current.videoApiConfig),
       });
       refs = videoImageSelection.selectedRefs;
       continuitySpatialBlocking = filterSpatialBlockingCharacters(
@@ -3469,7 +3488,12 @@ export function useStoryboardGeneration() {
         const choreographResult = requireStageText(await withStageTimeout(
           () => callBatchApiViaBff(stateRef.current.apiConfig, choreographUserMessages, {
             templateType: 'choreograph',
-            templateVars: { sceneType: currentSceneBlueprint?.sceneType, combatSubType: currentSceneBlueprint?.combatSubType, videoRatio: stateRef.current.videoApiConfig.videoRatio },
+            templateVars: {
+              sceneType: currentSceneBlueprint?.sceneType,
+              combatSubType: currentSceneBlueprint?.combatSubType,
+              videoRatio: stateRef.current.videoApiConfig.videoRatio,
+              maxImageReferences: getVideoImageReferenceLimit(stateRef.current.videoApiConfig),
+            },
           }, { temperature: 0.4, maxTokens: 10000 }),
           CHOREOGRAPH_STAGE_TIMEOUT_MS,
           'choreograph',
@@ -3493,7 +3517,12 @@ export function useStoryboardGeneration() {
           const retryResult = requireStageText(await withStageTimeout(
             () => callBatchApiViaBff(stateRef.current.apiConfig, retryUserMessages, {
               templateType: 'choreograph',
-              templateVars: { sceneType: currentSceneBlueprint?.sceneType, combatSubType: currentSceneBlueprint?.combatSubType, videoRatio: stateRef.current.videoApiConfig.videoRatio },
+              templateVars: {
+                sceneType: currentSceneBlueprint?.sceneType,
+                combatSubType: currentSceneBlueprint?.combatSubType,
+                videoRatio: stateRef.current.videoApiConfig.videoRatio,
+                maxImageReferences: getVideoImageReferenceLimit(stateRef.current.videoApiConfig),
+              },
             }, { temperature: 0.3, maxTokens: 10000 }),
             CHOREOGRAPH_STAGE_TIMEOUT_MS,
             'choreograph retry',
@@ -3697,6 +3726,7 @@ export function useStoryboardGeneration() {
           generateMode,
           officialVirtualHumanMode: useOfficialVirtualHumanTemplate,
           videoRatio: stateRef.current.videoApiConfig.videoRatio,
+          maxImageReferences: getVideoImageReferenceLimit(stateRef.current.videoApiConfig),
         },
       }, { temperature: 0.7, maxTokens: 8000 }), '最终提示词生成(generate)');
       ensureBatchSessionActive();

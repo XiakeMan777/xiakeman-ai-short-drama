@@ -69,6 +69,7 @@ import {
   isSeedanceServiceBackend,
 } from '@/lib/seedanceApi';
 import { resolveStoryboardVideoDuration } from '@/lib/storyboardDuration';
+import { getVolcVideoModelCapabilities } from '@/lib/volcengineVideoModels';
 import {
   compressStoryboardBoardForUpload,
   STORYBOARD_BOARD_UPLOAD_WEBP_QUALITY_LABEL,
@@ -233,7 +234,7 @@ function buildVideoExtensionPrompt(
   ].filter(Boolean).join('\n');
 
   return [
-    '【火山方舟全能参考多参模式】本镜是同一场景连续剧情，必须以视频1为直接续写源视频；视频2/视频3如存在，只能作为同场景空间母版、人物走位、光影风格和表演节奏参考。不要重新开场，不要重置人物站位，不要改变场景空间母版、机位轴线、角色服装、道具归属和对白秒点。若有动作变化，只能从视频1结尾状态顺滑过渡到本镜动作。',
+    `【火山方舟全能参考多参模式】本镜是同一场景连续剧情，必须以视频1为直接续写源视频；${(referenceVideos?.length ?? 0) > 1 ? `视频2..视频${referenceVideos!.length}` : '其他参考视频'}如存在，只能作为同场景空间母版、人物走位、光影风格和表演节奏参考。不要重新开场，不要重置人物站位，不要改变场景空间母版、机位轴线、角色服装、道具归属和对白秒点。若有动作变化，只能从视频1结尾状态顺滑过渡到本镜动作。`,
     details,
     '【本镜原始视频提示词】',
     prompt,
@@ -271,6 +272,7 @@ function resolveVolcReferenceVideos(
   storyboards: readonly StoryboardState[],
   currentIndex: number,
   decision: VideoContinuityDecision,
+  maxVideos: number,
 ): VolcReferenceVideoInput[] {
   const sourceIndex = decision.sourceIndex;
   const source = typeof sourceIndex === 'number' ? storyboards[sourceIndex] : undefined;
@@ -281,7 +283,7 @@ function resolveVolcReferenceVideos(
   const urls: string[] = [resolveVolcSourceVideoUrl(source)];
   const seen = new Set(urls);
 
-  for (let index = currentIndex - 1; index >= decision.groupHeadIndex && urls.length < 3; index -= 1) {
+  for (let index = currentIndex - 1; index >= decision.groupHeadIndex && urls.length < maxVideos; index -= 1) {
     if (index === sourceIndex) continue;
     const storyboard = storyboards[index];
     if (!storyboard || storyboard.videoStatus !== 'done' || !storyboard.videoUrl) continue;
@@ -293,7 +295,7 @@ function resolveVolcReferenceVideos(
   return urls.map((url) => ({ url }));
 }
 
-function normalizeStoryboardReferenceVideoUrls(storyboard: StoryboardState): string[] {
+function normalizeStoryboardReferenceVideoUrls(storyboard: StoryboardState, maxVideos: number): string[] {
   const urls = storyboard.referenceVideo?.urls ?? [];
   const seen = new Set<string>();
   return urls
@@ -304,18 +306,19 @@ function normalizeStoryboardReferenceVideoUrls(storyboard: StoryboardState): str
       seen.add(url);
       return true;
     })
-    .slice(0, 3);
+    .slice(0, maxVideos);
 }
 
 function mergeVolcReferenceVideos(
   continuityVideos: VolcReferenceVideoInput[] | undefined,
   storyboardReferenceUrls: string[],
+  maxVideos: number,
 ): VolcReferenceVideoInput[] | undefined {
   const merged: VolcReferenceVideoInput[] = [];
   const seen = new Set<string>();
   const pushUrl = (url: string | undefined) => {
     const normalized = url?.trim();
-    if (!normalized || seen.has(normalized) || merged.length >= 3) return;
+    if (!normalized || seen.has(normalized) || merged.length >= maxVideos) return;
     seen.add(normalized);
     merged.push({ url: normalized });
   };
@@ -406,6 +409,10 @@ export function useVideoSubmit(
 
       const index = task.storyboardIndex;
       const videoConfig = videoApiConfig;
+      const volcCapabilities = getVolcVideoModelCapabilities(videoConfig.volcModel);
+      const imageReferenceLimit = videoConfig.backend === 'volcengine'
+        ? volcCapabilities.maxImages
+        : 9;
       const submitDuration = resolveStoryboardVideoDuration(sb, videoConfig.videoDuration);
       const isAsync = options?.async ?? false;
       let abortCtrl: AbortController | null = null;
@@ -454,6 +461,7 @@ export function useVideoSubmit(
             includeScenePositionBoard: false,
             useStoryboardBoardReferencePack: directorMode,
             finalVideoPrompt: sbForSubmit.seedanceFinalVideoPrompt?.trim() || sbForSubmit.prompt?.rawText?.trim(),
+            imageReferenceLimit,
           },
         );
         const shouldUseStoryboardBoardReference = storyboardBoardReference.enabled && resolution.storyboardBoardIncluded;
@@ -467,7 +475,7 @@ export function useVideoSubmit(
         }
 
         if (resolution.exceedsLimit) {
-          const errorMsg = buildVideoReferenceLimitMessage(resolution.totalRefs);
+          const errorMsg = buildVideoReferenceLimitMessage(resolution.totalRefs, imageReferenceLimit);
           reportSubmitError(task, errorMsg, sbForSubmit.prompt?.rawText ?? '');
           if (!isAsync) toast.error(errorMsg);
           return;
@@ -587,7 +595,11 @@ export function useVideoSubmit(
           return;
         }
 
-        const promptReferenceBindingValidation = validateVideoPromptReferenceBindings(baseSubmitPrompt, resolution.effectiveItems);
+        const promptReferenceBindingValidation = validateVideoPromptReferenceBindings(
+          baseSubmitPrompt,
+          resolution.effectiveItems,
+          imageReferenceLimit,
+        );
         if (!promptReferenceBindingValidation.valid) {
           const errorMsg = promptReferenceBindingValidation.message ?? 'Step5 视频提示词里的【@图片x】引用和本次提交参考图不一致，请先修正后再提交。';
           reportSubmitError(task, errorMsg, baseSubmitPrompt);
@@ -598,7 +610,7 @@ export function useVideoSubmit(
         let promptForSubmit = baseSubmitPrompt;
         const continuityDecision = getStoryboardVideoContinuityDecision(chapter.storyboards, index);
         const storyboardReferenceVideoUrls = videoConfig.backend === 'volcengine'
-          ? normalizeStoryboardReferenceVideoUrls(sbForSubmit)
+          ? normalizeStoryboardReferenceVideoUrls(sbForSubmit, volcCapabilities.maxVideos)
           : [];
         let extensionOptions: {
           productionMode: 'normal' | 'extend';
@@ -648,7 +660,12 @@ export function useVideoSubmit(
               extensionOptions.sourceBlobKey = source.blobKey;
               promptForSubmit = buildVideoExtensionPrompt(baseSubmitPrompt, continuityDecision, previous, sbForSubmit);
             } else {
-              const referenceVideos = resolveVolcReferenceVideos(chapter.storyboards, index, continuityDecision);
+              const referenceVideos = resolveVolcReferenceVideos(
+                chapter.storyboards,
+                index,
+                continuityDecision,
+                volcCapabilities.maxVideos,
+              );
               extensionOptions.sourceVideoUrl = referenceVideos[0]?.url;
               extensionOptions.referenceVideos = referenceVideos;
               extensionOptions.sourceBlobKey = previous.videoBlobKey;
@@ -667,6 +684,7 @@ export function useVideoSubmit(
           extensionOptions.referenceVideos = mergeVolcReferenceVideos(
             extensionOptions.referenceVideos,
             storyboardReferenceVideoUrls,
+            volcCapabilities.maxVideos,
           );
         }
 
@@ -723,7 +741,7 @@ export function useVideoSubmit(
           const mergedAudioUrls: string[] = [];
           const seenAudioUrls = new Set<string>();
           for (const url of [...roleAudioUrls, ...globalAudioUrls]) {
-            if (seenAudioUrls.has(url) || mergedAudioUrls.length >= 3) continue;
+            if (seenAudioUrls.has(url) || mergedAudioUrls.length >= volcCapabilities.maxAudios) continue;
             seenAudioUrls.add(url);
             mergedAudioUrls.push(url);
           }

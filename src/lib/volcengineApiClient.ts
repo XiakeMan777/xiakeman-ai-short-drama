@@ -7,6 +7,11 @@ import type { VideoApiConfig } from '@/types';
 import type { ProgressDetail } from '@/lib/videoPoller';
 import { sleep } from '@/lib/async-utils';
 import { VOLC_STATUS_LABELS, smoothVolcProgress } from '@/lib/videoStatusLabels';
+import {
+  assertVolcReferenceCounts,
+  getVolcVideoModelCapabilities,
+  normalizeVolcVideoDuration,
+} from '@/lib/volcengineVideoModels';
 
 const POLL_INTERVAL = 30000; // 30秒轮询间隔
 const MAX_POLL_TIME = 120 * 60 * 1000; // 120分钟超时
@@ -119,13 +124,13 @@ function buildOrderedReferenceImages(
   referenceImages?: VolcReferenceImageInput[],
 ): VolcReferenceImageInput[] {
   if (referenceImages && referenceImages.length > 0) {
-    return referenceImages.slice(0, 9);
+    return referenceImages;
   }
 
   return [
     ...imageBlobs.map((blob) => ({ blob })),
     ...imageUrls.map((url) => ({ url })),
-  ].slice(0, 9);
+  ];
 }
 
 function normalizeReferenceUrl(value?: string | null): string | null {
@@ -158,9 +163,6 @@ function buildOrderedReferenceVideos(options?: {
         ? [options.videoUrl]
         : [];
   const urls = uniqueReferenceUrls(source);
-  if (urls.length > 3) {
-    throw new Error(`火山方舟 reference_video 最多支持 3 个，当前传入 ${urls.length} 个。请减少视频参考数量后重试。`);
-  }
   return urls.map((url) => ({ url }));
 }
 
@@ -177,9 +179,6 @@ function buildOrderedReferenceAudios(options?: {
         ? [options.audioUrl]
         : [];
   const urls = uniqueReferenceUrls(source);
-  if (urls.length > 3) {
-    throw new Error(`火山方舟 reference_audio 最多支持 3 个，当前传入 ${urls.length} 个。请减少音频参考数量后重试。`);
-  }
   return urls.map((url) => ({ url }));
 }
 
@@ -189,21 +188,21 @@ export async function volcSubmitVideo(
   prompt: string,
   imageBlobs: Blob[],
   options?: {
-    duration?: number;   // 4~15 秒，默认 10
+    duration?: number;   // 2.0 为 4~15 秒；2.5 为 4~30 秒
     ratio?: string;      // 宽高比，默认 '9:16'
     resolution?: '480p' | '720p' | '1080p';  // 分辨率，默认 720p
     generateAudio?: boolean; // 是否生成音频
     /** 参考视频 URL（可选） */
     videoUrl?: string;
-    /** 多个参考视频 URL（可选，最多3个） */
+    /** 多个参考视频 URL（2.0 最多3个；2.5 最多10个） */
     videoUrls?: string[];
-    /** 按提示词编号排序的统一参考视频列表（可选，最多3个） */
+    /** 按提示词编号排序的统一参考视频列表（2.0 最多3个；2.5 最多10个） */
     referenceVideos?: VolcReferenceVideoInput[];
     /** 参考音频 URL（可选） */
     audioUrl?: string;
-    /** 多个参考音频 URL（可选，最多3个） */
+    /** 多个参考音频 URL（2.0 最多3个；2.5 最多10个） */
     audioUrls?: string[];
-    /** 按提示词编号排序的统一参考音频列表（可选，最多3个） */
+    /** 按提示词编号排序的统一参考音频列表（2.0 最多3个；2.5 最多10个） */
     referenceAudios?: VolcReferenceAudioInput[];
     /** 官方或远程参考图 URL，例如 asset://asset-xxxx */
     imageUrls?: string[];
@@ -213,13 +212,24 @@ export async function volcSubmitVideo(
     requestId?: string;
     /** 外部取消信号（可选） */
     signal?: AbortSignal;
+    /** Seedance 2.5 全模态参考子任务类型 */
+    omniReferenceTaskType?: 'auto' | 'reference' | 'edit' | 'extend';
+    /** Seedance 2.5 输出格式；页面预览默认使用 mp4 */
+    outputFormat?: 'mp4' | 'mov';
   },
 ): Promise<{ taskId: string }> {
   const baseUrl = getVolcApiBase(config);
   const { duration = 10, ratio = '9:16', resolution = '720p', generateAudio = config.volcGenerateAudio, imageUrls = [], referenceImages, requestId, signal } = options || {};
+  const capabilities = getVolcVideoModelCapabilities(config.volcModel);
+  const normalizedDuration = normalizeVolcVideoDuration(duration, 10, config.volcModel);
   const orderedReferenceImages = buildOrderedReferenceImages(imageBlobs, imageUrls, referenceImages);
   const orderedReferenceVideos = buildOrderedReferenceVideos(options);
   const orderedReferenceAudios = buildOrderedReferenceAudios(options);
+  assertVolcReferenceCounts(config.volcModel, {
+    images: orderedReferenceImages.length,
+    videos: orderedReferenceVideos.length,
+    audios: orderedReferenceAudios.length,
+  });
 
   const content: VolcContentItem[] = [];
 
@@ -229,7 +239,7 @@ export async function volcSubmitVideo(
     text: prompt,
   });
 
-  // 参考图片（按提示词编号顺序提交，最多9张）
+  // 参考图片按提示词编号顺序提交；上限由所选模型能力决定。
   for (const referenceImage of orderedReferenceImages) {
     const url = referenceImage.url ?? await blobToDataUrl(referenceImage.blob);
     content.push({
@@ -239,7 +249,7 @@ export async function volcSubmitVideo(
     });
   }
 
-  // 参考视频（可选，按提示词中的“视频1/视频2/视频3”顺序提交）
+  // 参考视频按提示词中的“视频1..N”顺序提交。
   for (const referenceVideo of orderedReferenceVideos) {
     content.push({
       type: 'video_url',
@@ -248,7 +258,7 @@ export async function volcSubmitVideo(
     });
   }
 
-  // 参考音频（可选，按提示词中的“音频1/音频2/音频3”顺序提交）
+  // 参考音频按提示词中的“音频1..N”顺序提交。
   for (const referenceAudio of orderedReferenceAudios) {
     content.push({
       type: 'audio_url',
@@ -261,10 +271,20 @@ export async function volcSubmitVideo(
     model: config.volcModel,
     content,
     ratio,
-    duration,
+    duration: normalizedDuration,
     resolution,
     watermark: false,
   };
+
+  if (capabilities.isSeedance25) {
+    const totalReferences = orderedReferenceImages.length
+      + orderedReferenceVideos.length
+      + orderedReferenceAudios.length;
+    if (totalReferences > 0) {
+      body.omni_reference_task_type = options?.omniReferenceTaskType ?? 'reference';
+    }
+    body.output_format = options?.outputFormat ?? 'mp4';
+  }
 
   // 幂等请求 ID（避免网络重试导致重复提交）
   if (requestId) {
@@ -428,6 +448,8 @@ export async function volcGenerateVideo(
     referenceAudios?: VolcReferenceAudioInput[];
     imageUrls?: string[];
     referenceImages?: VolcReferenceImageInput[];
+    omniReferenceTaskType?: 'auto' | 'reference' | 'edit' | 'extend';
+    outputFormat?: 'mp4' | 'mov';
     onProgress?: (detail: ProgressDetail) => void;
     /** 提交成功后回调，携带真实 taskId */
     onSubmitted?: (taskId: string) => void;

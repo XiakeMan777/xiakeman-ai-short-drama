@@ -294,12 +294,15 @@ function buildStoryboardModePlanningContract(
   references: StoryboardBoardReference[],
   frameRatio?: string,
   sequenceContinuityContext?: StoryboardSequenceContinuityContext,
+  maxImageReferences = 9,
 ): StoryboardBoardPlanningContract {
   const isShotPlanMode = isShotPlanBoardMode(mode);
   const isSmartShotPlanMode = isSmartShotPlanBoardMode(mode);
   const usesOutfitReference = hasOutfitReference(references);
   const usesNoFaceReference = hasNoFaceReference(references);
   const hasPrevious = !!sequenceContinuityContext?.hasPrevious;
+  const totalVideoSlots = Math.max(1, Math.min(30, Math.round(maxImageReferences || 9)));
+  const step3ReferenceSlots = Math.max(1, totalVideoSlots - 1);
   const targetFrameRatio = getBoardFrameRatio(mode, frameRatio);
   const ratioGrammarRule = targetFrameRatio === '9:16'
     ? 'Target video frame is 9:16 vertical: prioritize readable face/upper-body emotional beats, center-safe blocking, vertical depth, and fewer wide horizontal tracking moves; do not leak horizontal-only camera grammar into the plan.'
@@ -317,7 +320,7 @@ function buildStoryboardModePlanningContract(
       'Only then write panels, layoutRules, negativeRules, and continuity handoff fields.',
     ],
     referenceRules: [
-      'Seedance video submission can use 9 image slots total. In storyboard-board mode, the generated storyboard board image reserves 1 slot, so Step3 references must be budgeted to at most 8 slots.',
+      `The selected Seedance model can use ${totalVideoSlots} image slots total. In storyboard-board mode, the generated storyboard board image reserves 1 slot, so Step3 references must be budgeted to at most ${step3ReferenceSlots} slots.`,
       'directorBrief.referenceBudget must mark every candidate reference as mustKeep, preferKeep, or textFallback with one concise story reason. Use mustKeep only for scene/character/prop references whose visual identity directly changes this shot.',
       'directorBrief.referencePriority must order references from most important to least important for the current shot; later deterministic code will still enforce hard safety rules.',
       'directorBrief.referenceMatching must cover every usable reference by refId; do not merge multiple references just because the character name is the same.',
@@ -1584,6 +1587,7 @@ export function buildStoryboardBoardPlanRequest(
   cameraSegmentCount?: number,
   options?: {
     compactPlanning?: boolean;
+    maxImageReferences?: number;
   },
 ) {
   const prompt = storyboard.prompt;
@@ -1602,6 +1606,8 @@ export function buildStoryboardBoardPlanRequest(
     smartPanelCountPreference,
   );
   const normalizedCameraSegmentCount = normalizeStoryboardCameraSegmentCount(cameraSegmentCount);
+  const totalVideoSlots = Math.max(1, Math.min(30, Math.round(options?.maxImageReferences || 9)));
+  const step3ReferenceSlots = Math.max(1, totalVideoSlots - 1);
   const payload: StoryboardBoardPlanRequestPayload = {
     mode,
     panelCount,
@@ -1631,7 +1637,13 @@ export function buildStoryboardBoardPlanRequest(
       promptHeader: prompt?.header,
       promptColorLighting: prompt?.colorLighting,
     }),
-    storyboardModeContract: buildStoryboardModePlanningContract(mode, references, frameRatio, sequenceContinuityContext),
+    storyboardModeContract: buildStoryboardModePlanningContract(
+      mode,
+      references,
+      frameRatio,
+      sequenceContinuityContext,
+      totalVideoSlots,
+    ),
     storyboard: {
       number: storyboard.storyboard.number,
       name: storyboard.storyboard.name,
@@ -1689,10 +1701,10 @@ export function buildStoryboardBoardPlanRequest(
     sequenceContinuityContext,
     directorBrief,
     referenceBudget: {
-      totalVideoSlots: 9,
+      totalVideoSlots,
       reservedStoryboardBoardSlots: 1,
-      step3ReferenceSlots: 8,
-      rule: '故事板模式最终视频提交固定预留 1 张故事板宫格图，所以 Step3 参考图最多保留 8 张；请按当前剧情重要性给出 mustKeep / preferKeep / textFallback。',
+      step3ReferenceSlots,
+      rule: `故事板模式最终视频提交固定预留 1 张故事板宫格图，所以 Step3 参考图最多保留 ${step3ReferenceSlots} 张；请按当前剧情重要性给出 mustKeep / preferKeep / textFallback。`,
     },
     references: references.map((reference) => ({
       ...reference,
@@ -1716,6 +1728,9 @@ export function buildStoryboardDirectorBriefRequest(
   repairHint?: string,
   smartPanelCountPreference?: SmartStoryboardPanelCountPreference,
   cameraSegmentCount?: number,
+  options?: {
+    maxImageReferences?: number;
+  },
 ) {
   return buildStoryboardBoardPlanRequest(
     storyboard,
@@ -1729,6 +1744,7 @@ export function buildStoryboardDirectorBriefRequest(
     styleConfig,
     smartPanelCountPreference,
     cameraSegmentCount,
+    options,
   );
 }
 
@@ -1745,6 +1761,9 @@ export function buildStoryboardActionDirectorRequest(
   styleConfig?: string,
   smartPanelCountPreference?: SmartStoryboardPanelCountPreference,
   cameraSegmentCount?: number,
+  options?: {
+    maxImageReferences?: number;
+  },
 ) {
   const payload = JSON.parse(buildStoryboardBoardPlanRequest(
     storyboard,
@@ -1758,6 +1777,7 @@ export function buildStoryboardActionDirectorRequest(
     styleConfig,
     smartPanelCountPreference,
     cameraSegmentCount,
+    options,
   )) as StoryboardBoardPlanRequestPayload;
 
   payload.currentPlan = compactStoryboardBoardPlanForActionDirector(currentPlan);
@@ -1788,6 +1808,7 @@ export function buildStoryboardBoardFormatRepairRequest(
   cameraSegmentCount?: number,
   options?: {
     compactPlanning?: boolean;
+    maxImageReferences?: number;
   },
 ) {
   const payload = JSON.parse(buildStoryboardBoardPlanRequest(
@@ -1831,6 +1852,7 @@ export function buildStoryboardBoardQualityRepairRequest(
   cameraSegmentCount?: number,
   options?: {
     compactPlanning?: boolean;
+    maxImageReferences?: number;
   },
 ) {
   const payload = JSON.parse(buildStoryboardBoardPlanRequest(

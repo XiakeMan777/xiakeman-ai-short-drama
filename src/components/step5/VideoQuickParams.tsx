@@ -26,6 +26,13 @@ import {
   normalizeVisibleSeedanceServiceModel,
 } from '@/lib/seedanceApi';
 import { DEFAULT_VOLC_API_BASE } from '@/lib/volcengineApiClient';
+import {
+  getVolcVideoDurationOptions,
+  getVolcVideoModelCapabilities,
+  normalizeVolcVideoDuration,
+  VOLC_VIDEO_MODEL_OPTIONS,
+} from '@/lib/volcengineVideoModels';
+import { getStoryboardVoiceReferenceLimit } from '@/lib/characterVoiceReferences';
 
 export function VideoQuickParams({
   videoConfig,
@@ -42,7 +49,14 @@ export function VideoQuickParams({
   const backend = videoConfig.backend;
   const isSeedanceCloud = backend === 'seedancecloud';
   const isAliyunBailian = backend === 'aliyunbailian';
-  const effectiveVideoDuration = normalizeSeedanceServiceDuration(videoConfig.videoDuration);
+  const volcCapabilities = getVolcVideoModelCapabilities(videoConfig.volcModel);
+  const voiceReferenceLimit = getStoryboardVoiceReferenceLimit(videoConfig);
+  const effectiveVideoDuration = backend === 'volcengine'
+    ? normalizeVolcVideoDuration(videoConfig.videoDuration, 10, videoConfig.volcModel)
+    : normalizeSeedanceServiceDuration(videoConfig.videoDuration);
+  const durationOptions = backend === 'volcengine'
+    ? getVolcVideoDurationOptions(videoConfig.volcModel)
+    : [...SEEDANCE_SERVICE_DURATIONS];
   const durationSummary = typeof currentSubmitDurationSeconds === 'number'
     && Number.isFinite(currentSubmitDurationSeconds)
     && currentSubmitDurationSeconds !== effectiveVideoDuration
@@ -54,7 +68,7 @@ export function VideoQuickParams({
   const extensionSupported = supportsVideoExtensionBackend(backend);
   const extensionEnabled = isVideoExtensionEnabled(videoConfig);
   const extensionCopy = backend === 'volcengine'
-    ? '火山方舟会走官方全能参考多参模式：9 张参考图 + 最多 3 个同场景参考视频 + 最多 3 个公共音频 URL。视频1负责直接续写，视频2/3只约束空间、站位和风格。'
+    ? `火山方舟会走官方全模态参考：${volcCapabilities.maxImages} 张参考图 + 最多 ${volcCapabilities.maxVideos} 个参考视频 + 最多 ${volcCapabilities.maxAudios} 个公共音频 URL。视频1负责直接续写，其他视频只约束空间、站位和风格。`
     : isSeedanceServiceBackend(backend)
       ? '小云雀会把上一镜视频交给服务端模拟延长，适合作为火山方舟不可用时的备用通道。'
       : '当前后端暂不支持上一镜参考视频；同场景连续镜头会按普通图生视频生成。';
@@ -113,7 +127,7 @@ export function VideoQuickParams({
             <div className="space-y-1">
               <Label className="text-xs">角色配音参考</Label>
               <p className="text-[10px] leading-5">
-                开启后，Step4 会把当前分镜最多 3 位说话角色写进声线要求；小云雀和火山方舟都按 @音频1-3 提交音频参考，图片编号单独计算。
+                开启后，Step4 会把当前分镜最多 {voiceReferenceLimit} 位说话角色写进声线要求；当前后端按 @音频1-{voiceReferenceLimit} 提交音频参考，图片编号单独计算。
               </p>
             </div>
             <Switch
@@ -198,7 +212,7 @@ export function VideoQuickParams({
             <div className="space-y-1 rounded-2xl border border-white/70 bg-white/60 p-3 dark:border-slate-700/70 dark:bg-slate-900/55">
               <Label className="text-xs">时长（秒）</Label>
               <div className="grid grid-cols-4 gap-1.5">
-                  {SEEDANCE_SERVICE_DURATIONS.map((duration) => (
+                  {durationOptions.map((duration) => (
                     <button
                       key={duration}
                       type="button"
@@ -214,7 +228,9 @@ export function VideoQuickParams({
                   ))}
               </div>
               <p className="text-[10px] leading-4 text-muted-foreground">
-                所有视频模型统一支持 4-15 秒整数；提交时优先使用当前分镜在 Step4 中写明的时长，这里只作兜底。
+                {backend === 'volcengine' && volcCapabilities.isSeedance25
+                  ? 'Seedance 2.5 支持 4-30 秒整数；提交时优先使用当前分镜在 Step4 中写明的时长，这里只作兜底。'
+                  : '当前模型支持 4-15 秒整数；提交时优先使用当前分镜在 Step4 中写明的时长，这里只作兜底。'}
               </p>
             </div>
             <div className="space-y-1 rounded-2xl border border-white/70 bg-white/60 p-3 dark:border-slate-700/70 dark:bg-slate-900/55">
@@ -273,15 +289,29 @@ export function VideoQuickParams({
               </div>
               <div className="space-y-1 rounded-2xl border border-white/70 bg-white/60 p-3 dark:border-slate-700/70 dark:bg-slate-900/55">
                 <Label className="text-xs">火山方舟模型</Label>
-                <Input
-                  value={videoConfig.volcModel || ''}
-                  onChange={(e) => updateConfig({ volcModel: e.target.value })}
-                  placeholder="doubao-seedance-2-0-260128-fast"
-                  className="h-8 text-xs"
-                />
+                <select
+                  value={videoConfig.volcModel}
+                  onChange={(event) => {
+                    const volcModel = event.target.value;
+                    updateConfig({
+                      volcModel,
+                      videoDuration: normalizeVolcVideoDuration(videoConfig.videoDuration, 10, volcModel),
+                    });
+                  }}
+                  className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 text-xs shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  {VOLC_VIDEO_MODEL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] leading-4 text-muted-foreground">
+                  {volcCapabilities.isSeedance25
+                    ? '2.5 已开放 30 图 / 10 视频 / 10 音频，共 50 个参考素材。'
+                    : '旧模型继续按 9 图 / 3 视频 / 3 音频限制提交。'}
+                </p>
               </div>
               <div className="space-y-2 rounded-2xl border border-white/70 bg-white/60 p-3 dark:border-slate-700/70 dark:bg-slate-900/55">
-                <Label className="text-xs">reference_audio 公共 URL（最多 3 个）</Label>
+                <Label className="text-xs">reference_audio 公共 URL（最多 {volcCapabilities.maxAudios} 个）</Label>
                 <Textarea
                   value={volcAudioText}
                   onChange={(e) => updateConfig({
@@ -289,7 +319,7 @@ export function VideoQuickParams({
                       .split(/\r?\n/)
                       .map((url) => url.trim())
                       .filter(Boolean)
-                      .slice(0, 3),
+                      .slice(0, volcCapabilities.maxAudios),
                   })}
                   placeholder="https://example.com/dialogue-guide.mp3"
                   className="min-h-[72px] text-xs"
@@ -555,7 +585,7 @@ export function VideoQuickParams({
 
           {backend === 'volcengine' && extensionEnabled && (
             <div className="rounded-2xl border border-blue-200/70 bg-blue-50/70 px-3 py-2 text-[11px] leading-relaxed text-blue-900 dark:border-blue-400/25 dark:bg-blue-500/10 dark:text-blue-100">
-              火山方舟全能参考开启后，本集批量生成会自动改为 1 个任务串行执行；同场景后续镜头会提交最多 3 个 reference_video，确保视频1已完成并保留远程 video_url。
+              火山方舟全能参考开启后，本集批量生成会自动改为 1 个任务串行执行；同场景后续镜头会提交最多 {volcCapabilities.maxVideos} 个 reference_video，确保视频1已完成并保留远程 video_url。
             </div>
           )}
         </div>

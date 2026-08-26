@@ -121,6 +121,13 @@ export interface VideoReferenceResolveOptions {
   includeScenePositionBoard?: boolean;
   useStoryboardBoardReferencePack?: boolean;
   finalVideoPrompt?: string;
+  /** 当前视频模型允许的图片参考数；旧模型默认 9，Seedance 2.5 为 30。 */
+  imageReferenceLimit?: number;
+}
+
+function normalizeVideoReferenceLimit(value?: number) {
+  if (!Number.isFinite(value)) return VIDEO_REFERENCE_LIMIT;
+  return Math.max(1, Math.min(30, Math.floor(value!)));
 }
 
 function pickLatestAsset(candidates: readonly Asset[]) {
@@ -270,7 +277,7 @@ function normalizePromptReferenceName(value: string) {
     .toLowerCase();
 }
 
-function extractPromptReferenceSlots(prompt?: string): VideoReferencePromptSlot[] {
+function extractPromptReferenceSlots(prompt?: string, imageReferenceLimit = VIDEO_REFERENCE_LIMIT): VideoReferencePromptSlot[] {
   const text = String(prompt || '');
   if (!text.trim()) return [];
   const slots: VideoReferencePromptSlot[] = [];
@@ -291,7 +298,7 @@ function extractPromptReferenceSlots(prompt?: string): VideoReferencePromptSlot[
     if (!match) continue;
     const number = Number(match[2]);
     const name = match[1]?.trim();
-    if (!name || !Number.isFinite(number) || number < 1 || number > VIDEO_REFERENCE_LIMIT || seen.has(number)) continue;
+    if (!name || !Number.isFinite(number) || number < 1 || number > imageReferenceLimit || seen.has(number)) continue;
     seen.add(number);
     slots.push({ number, name });
   }
@@ -381,6 +388,7 @@ function findPromptReferenceLabelTarget(
 export function validateVideoPromptReferenceBindings(
   prompt: string,
   items: readonly EffectiveVideoReferenceItem[],
+  imageReferenceLimit = VIDEO_REFERENCE_LIMIT,
 ): VideoPromptReferenceBindingValidation {
   const text = String(prompt || '');
   const mismatches: VideoPromptReferenceBindingMismatch[] = [];
@@ -390,7 +398,7 @@ export function validateVideoPromptReferenceBindings(
   for (const match of text.matchAll(pattern)) {
     const number = Number(match[2]);
     const labelName = normalizePromptReferenceLabelName(match[1] ?? '');
-    if (!labelName || !Number.isFinite(number) || number < 1 || number > VIDEO_REFERENCE_LIMIT) continue;
+    if (!labelName || !Number.isFinite(number) || number < 1 || number > imageReferenceLimit) continue;
 
     const actualItem = items[number - 1];
     const intendedItem = findPromptReferenceLabelTarget(labelName, items);
@@ -427,8 +435,9 @@ export function validateVideoPromptReferenceBindings(
 function applyFinalPromptReferenceOrder(
   items: EffectiveVideoReferenceItem[],
   finalVideoPrompt?: string,
+  imageReferenceLimit = VIDEO_REFERENCE_LIMIT,
 ): { items: EffectiveVideoReferenceItem[]; state: VideoReferencePromptOrderState } {
-  const slots = extractPromptReferenceSlots(finalVideoPrompt);
+  const slots = extractPromptReferenceSlots(finalVideoPrompt, imageReferenceLimit);
   if (slots.length === 0) {
     return {
       items,
@@ -509,6 +518,7 @@ export function resolveVideoReferenceAssets(
   frameRatio?: string,
   options: VideoReferenceResolveOptions = {},
 ): VideoReferenceResolution {
+  const imageReferenceLimit = normalizeVideoReferenceLimit(options.imageReferenceLimit);
   const resolved: ResolvedVideoReference[] = [];
   const missing: ImageReference[] = [];
   const rawEffectiveItems: EffectiveVideoReferenceItem[] = [];
@@ -583,6 +593,7 @@ export function resolveVideoReferenceAssets(
   const promptOrderResult = applyFinalPromptReferenceOrder(
     normalizedEffectiveItems,
     options.finalVideoPrompt,
+    imageReferenceLimit,
   );
   const effectiveItems = promptOrderResult.items;
   const storyboardBoardItem = effectiveItems.find((item) => item.type === 'storyboard-board');
@@ -591,12 +602,12 @@ export function resolveVideoReferenceAssets(
   return {
     totalRefs,
     rawTotalRefs,
-    exceedsLimit: totalRefs > VIDEO_REFERENCE_LIMIT,
+    exceedsLimit: totalRefs > imageReferenceLimit,
     resolved,
     missing,
     effectiveItems,
     budget: {
-      limit: VIDEO_REFERENCE_LIMIT,
+      limit: imageReferenceLimit,
       originalTotalRefs: rawTotalRefs,
       compressed: false,
       omittedItems: [],
@@ -617,8 +628,9 @@ function formatReferenceLabel(ref: ImageReference) {
   return `${ref.refId} ${ref.name}`.trim();
 }
 
-export function buildVideoReferenceLimitMessage(totalRefs: number): string {
-  return `当前分镜共引用 ${totalRefs} 张参考图，但 Seedance 2.0 全能参考模式最多只支持 ${VIDEO_REFERENCE_LIMIT} 张。可在 Step5 的“本次提交参考图”中删除不需要的图片；普通小物件可合并为小道具合集图或改用文字描述，核心角色/场景/剧情道具优先保留。`;
+export function buildVideoReferenceLimitMessage(totalRefs: number, imageReferenceLimit = VIDEO_REFERENCE_LIMIT): string {
+  const modelLabel = imageReferenceLimit > VIDEO_REFERENCE_LIMIT ? 'Seedance 2.5' : '当前视频模型';
+  return `当前分镜共引用 ${totalRefs} 张参考图，但${modelLabel}最多只支持 ${imageReferenceLimit} 张。可在 Step5 的“本次提交参考图”中删除不需要的图片；普通小物件可合并为小道具合集图或改用文字描述，核心角色/场景/剧情道具优先保留。`;
 }
 
 export function buildMissingVideoReferenceMessage(missing: ImageReference[]): string {

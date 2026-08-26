@@ -11,6 +11,7 @@ import { useConfirm } from '@/hooks/useConfirmPrompt';
 import { sanitizeMisboundImageReferenceLabels } from '@/lib/promptImageRefValidation';
 import { isStoryboardPromptReady } from '@/lib/storyboardReadiness';
 import { volcResolveCompletedVideoUrl } from '@/lib/volcengineApiClient';
+import { getVideoImageReferenceLimit } from '@/lib/volcengineVideoModels';
 import { deleteBlob, saveBlob } from '@/lib/imageStore';
 import { formatBytes } from '@/lib/lightweightImageCompression';
 import {
@@ -50,7 +51,6 @@ import {
   buildMissingVideoReferenceMessage,
   buildVideoReferenceLimitMessage,
   resolveVideoReferenceAssets,
-  VIDEO_REFERENCE_LIMIT,
   type EffectiveVideoReferenceItem,
 } from './videoReferenceResolver';
 import {
@@ -624,6 +624,7 @@ export function Step5VideoGenerator() {
     const imageRefs = getStoryboardVideoImageRefs(sb);
     const storyboardBoardReference = resolveStoryboardBoardVideoReferenceState(sb);
     const isDirectorMode = isStoryboardDirectorMode(sb);
+    const imageReferenceLimit = getVideoImageReferenceLimit(state.videoApiConfig);
     const referenceResolution = resolveVideoReferenceAssets(
       imageRefs,
       currentProject.assetLibrary ?? [],
@@ -634,6 +635,7 @@ export function Step5VideoGenerator() {
         includeScenePositionBoard: false,
         useStoryboardBoardReferencePack: isDirectorMode,
         finalVideoPrompt: sb.seedanceFinalVideoPrompt?.trim() || sb.prompt?.rawText?.trim(),
+        imageReferenceLimit,
       },
     );
 
@@ -643,7 +645,7 @@ export function Step5VideoGenerator() {
     }
 
     if (referenceResolution.exceedsLimit) {
-      toast.warning(buildVideoReferenceLimitMessage(referenceResolution.totalRefs));
+      toast.warning(buildVideoReferenceLimitMessage(referenceResolution.totalRefs, imageReferenceLimit));
       return;
     }
 
@@ -661,7 +663,7 @@ export function Step5VideoGenerator() {
     const basePrompt = sanitizeMisboundImageReferenceLabels(buildEffectiveVideoPrompt(sb.prompt?.rawText ?? '', {
       includeStoryboardBoardReference: includeStoryboardBoardInPrompt,
       storyboardBoardAvailable: includeStoryboardBoardInPrompt,
-      storyboardBoardReferenceLabel: referenceResolution.storyboardBoardRefId ?? `参考图片${Math.min(referenceResolution.effectiveItems.length + 1, VIDEO_REFERENCE_LIMIT)}`,
+      storyboardBoardReferenceLabel: referenceResolution.storyboardBoardRefId ?? `参考图片${Math.min(referenceResolution.effectiveItems.length + 1, imageReferenceLimit)}`,
       storyboardBoardModeLabel: storyboardBoardReference.modeLabel,
     }), imageRefs);
     const desensitizeSourcePrompt = isDirectorMode
@@ -734,7 +736,7 @@ export function Step5VideoGenerator() {
       });
       toast.error(`脱敏失败：${message}`);
     }
-  }, [chapter, currentProject, dispatch, callApiViaBff, state.apiConfig, state.videoApiConfig.videoRatio]);
+  }, [chapter, currentProject, dispatch, callApiViaBff, state.apiConfig, state.videoApiConfig]);
 
   const recoverVolcResult = useCallback(async (index: number) => {
     if (!chapter) return;
@@ -789,6 +791,7 @@ export function Step5VideoGenerator() {
     const directorMode = isStoryboardDirectorMode(storyboard);
     const imageRefs = getStoryboardVideoImageRefs(storyboard);
     const storyboardBoardReference = resolveStoryboardBoardVideoReferenceState(storyboard);
+    const imageReferenceLimit = getVideoImageReferenceLimit(state.videoApiConfig);
     const resolution = resolveVideoReferenceAssets(
       imageRefs,
       currentProject.assetLibrary,
@@ -799,6 +802,7 @@ export function Step5VideoGenerator() {
         includeScenePositionBoard: false,
         useStoryboardBoardReferencePack: directorMode,
         finalVideoPrompt: storyboard.seedanceFinalVideoPrompt?.trim() || storyboard.prompt?.rawText?.trim(),
+        imageReferenceLimit,
       },
     );
     const shouldUseStoryboardBoardReference = storyboardBoardReference.enabled && resolution.storyboardBoardIncluded;
@@ -825,7 +829,7 @@ export function Step5VideoGenerator() {
     });
     const overrideState = getVideoSubmitPromptOverrideState(storyboard, autoPrompt);
     return overrideState.isUsable ? overrideState.prompt : autoPrompt;
-  }, [chapter, currentProject, state.videoApiConfig.videoRatio]);
+  }, [chapter, currentProject, state.videoApiConfig]);
 
   const recoverSeedanceResult = useCallback(async (index: number) => {
     if (!chapter) return;

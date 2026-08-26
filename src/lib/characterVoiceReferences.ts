@@ -5,8 +5,17 @@ import type {
   VideoApiConfig,
 } from '@/types';
 import { isSeedanceServiceBackend } from '@/lib/seedanceApi';
+import { getVolcVideoModelCapabilities } from '@/lib/volcengineVideoModels';
 
 export const MAX_STORYBOARD_VOICE_REFERENCES = 3;
+
+export function getStoryboardVoiceReferenceLimit(
+  videoConfig?: Pick<VideoApiConfig, 'backend' | 'volcModel'>,
+) {
+  return videoConfig?.backend === 'volcengine'
+    ? getVolcVideoModelCapabilities(videoConfig.volcModel).maxAudios
+    : MAX_STORYBOARD_VOICE_REFERENCES;
+}
 
 export type VoiceReferenceMediaType = 'video' | 'audio';
 
@@ -136,12 +145,13 @@ function resolveVoiceReferenceMediaType(
 export function resolveStoryboardVoiceReferences(input: {
   storyboard: StoryboardState;
   project: Pick<Project, 'characterVoiceReferences'> | null | undefined;
-  videoConfig: Pick<VideoApiConfig, 'backend' | 'characterVoiceReferencesEnabled'>;
+  videoConfig: Pick<VideoApiConfig, 'backend' | 'characterVoiceReferencesEnabled' | 'volcModel'>;
   maxCount?: number;
 }): ResolvedStoryboardVoiceReference[] {
   if (!isCharacterVoiceReferenceEnabled(input.videoConfig)) return [];
 
-  const maxCount = Math.max(0, Math.min(MAX_STORYBOARD_VOICE_REFERENCES, input.maxCount ?? MAX_STORYBOARD_VOICE_REFERENCES));
+  const modelLimit = getStoryboardVoiceReferenceLimit(input.videoConfig);
+  const maxCount = Math.max(0, Math.min(modelLimit, input.maxCount ?? modelLimit));
   if (maxCount === 0) return [];
 
   const picked: ResolvedStoryboardVoiceReference[] = [];
@@ -188,7 +198,7 @@ export function buildSeedanceVoiceReferencePromptBlock(references: readonly Reso
     return `${carrier} = ${reference.characterName} 的配音参考，只读取声音、语速、情绪颗粒和口语节奏，不迁移角色外观；${tone}${sample}`;
   });
   return [
-    '角色配音参考（最多 3 位，和实际提交顺序一致）：',
+    `角色配音参考（本分镜 ${references.length} 位，和实际提交顺序一致）：`,
     '媒体编号规则：@图片、@视频、@音频是三套独立编号；小云雀按 @音频1..N 提交音频参考，不延续图片编号，也不按混合上传文件总顺序计数。',
     ...lines,
     '音画同步要求：当前分镜中这些角色开口时，口型、停顿和情绪强度贴近对应声线参考；未列入的角色按文本表演说明执行，不新增音频参考。',

@@ -1,7 +1,7 @@
 {
   "name": "xiakeman-community",
   "private": true,
-  "version": "0.8.0-community.1",
+  "version": "0.8.0-community.2",
   "description": "Source-available AI workspace for turning stories and scripts into storyboards, images and videos.",
   "license": "PolyForm-Noncommercial-1.0.0",
   "main": "desktop/main.cjs",
@@ -14,6 +14,7 @@
     "dev:web": "vite",
     "dev:bff": "npm run dev --prefix bff",
     "build": "tsc -b && vite build",
+    "test": "npm run test --prefix bff",
     "lint": "eslint .",
     "encoding:check": "node scripts/check-utf8.mjs",
     "utf8": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/use-utf8-console.ps1",

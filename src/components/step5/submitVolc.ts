@@ -10,6 +10,7 @@ import type {
 } from '@/lib/volcengineApiClient';
 import { cacheVideoBlob } from './videoUtils';
 import { normalizeFrameRatio } from '@/lib/frameRatio';
+import { getVolcVideoModelCapabilities } from '@/lib/volcengineVideoModels';
 import type { VideoApiConfig, VideoProductionMode } from '@/types';
 import type { Action } from '@/stores/projectStore';
 import type { Dispatch } from 'react';
@@ -52,6 +53,7 @@ export async function submitVolcVideo(
   options?: VolcSubmitOptions,
 ): Promise<void> {
   const isExtend = options?.productionMode === 'extend';
+  const volcCapabilities = getVolcVideoModelCapabilities(videoConfig.volcModel);
   const referenceVideos = options?.referenceVideos
     ?? options?.sourceVideoUrls?.map((url) => ({ url }))
     ?? (options?.sourceVideoUrl ? [{ url: options.sourceVideoUrl }] : undefined);
@@ -89,13 +91,19 @@ export async function submitVolcVideo(
       blobs,
       {
         duration: options?.duration ?? videoConfig.videoDuration,
-        ratio: normalizeFrameRatio(videoConfig.videoRatio),
+        ratio: volcCapabilities.isSeedance25 && isExtend
+          ? 'adaptive'
+          : normalizeFrameRatio(videoConfig.videoRatio),
         resolution: volcResolution,
         generateAudio: videoConfig.volcGenerateAudio,
         imageUrls,
         referenceImages: options?.referenceImages,
         referenceVideos,
         referenceAudios: options?.referenceAudios,
+        omniReferenceTaskType: volcCapabilities.isSeedance25
+          ? (isExtend ? 'extend' : 'reference')
+          : undefined,
+        outputFormat: volcCapabilities.isSeedance25 ? 'mp4' : undefined,
         onProgress: (detail) => {
           dispatchRef.current({
             type: 'UPDATE_VIDEO_PROGRESS',

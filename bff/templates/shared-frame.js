@@ -576,9 +576,16 @@ function formatImageReferenceLine(ref) {
   return `- ${ref.refId} → ${getImageReferenceRoleLabel(ref)}: ${ref.name}${outfitSuffix}${propSuffix}${bindingSuffix}；${getSeedanceReferenceRoleHint(ref)}`;
 }
 
-function buildSeedanceReferenceRoleInstruction(imageRefs, modeLabel) {
+function normalizeVideoImageReferenceLimit(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(1, Math.min(30, Math.round(parsed))) : 9;
+}
+
+function buildSeedanceReferenceRoleInstruction(imageRefs, modeLabel, maxImageReferences = 9) {
   if (!imageRefs || imageRefs.length === 0) return '';
-  return `\n\n## Seedance 2.0 素材角色表（${modeLabel}必须遵守）\n${imageRefs.map((ref, index) => `- @Image${index + 1} / ${ref.refId} / ${ref.name}：${getSeedanceReferenceRoleHint(ref)}。`).join('\n')}\n- 写最终视频提示词时，素材角色优先于泛化描述；身份、服装、场景、道具、构图职责不得串用。\n- Seedance 2.0 全能参考模式最多 9 张图；普通小物件优先文字化或合并成合集图，不要占用核心角色/场景/剧情道具的预算。\n- 时间段中首次出现角色或道具时继续使用“(图片N)”标注，帮助模型把文字动作绑定到正确参考素材。`;
+  const limit = normalizeVideoImageReferenceLimit(maxImageReferences);
+  const modelLabel = limit > 9 ? 'Seedance 2.5' : 'Seedance 2.0';
+  return `\n\n## ${modelLabel} 素材角色表（${modeLabel}必须遵守）\n${imageRefs.map((ref, index) => `- @Image${index + 1} / ${ref.refId} / ${ref.name}：${getSeedanceReferenceRoleHint(ref)}。`).join('\n')}\n- 写最终视频提示词时，素材角色优先于泛化描述；身份、服装、场景、道具、构图职责不得串用。\n- 当前视频模型最多支持 ${limit} 张参考图；普通小物件优先文字化或合并成合集图，不要占用核心角色/场景/剧情道具的预算。\n- 时间段中首次出现角色或道具时继续使用“(图片N)”标注，帮助模型把文字动作绑定到正确参考素材。`;
 }
 
 function buildVisualCharacterReferenceInstruction(imageRefs, modeLabel) {
@@ -589,20 +596,23 @@ function buildVisualCharacterReferenceInstruction(imageRefs, modeLabel) {
   return `\n\n## 角色引用白名单硬约束（${modeLabel}必须遵守）\n- 本分镜可作为视觉角色主语的名单只有：${allowedNames}。\n- imageRefMap、actions[].character、人物段、时间段主语都只能使用上述角色名和编号；不得新增“杂役甲/杂役乙/杂役丙/护工甲/守备队/对白/台词”等临时角色名、语音通道名或抽象组织名。\n- 如果某个参考图是群体角色（例如“杂役/护工群像”“守备队员群像”），只能把它当作一个群体角色引用；可以写“近侧一名杂役”“后景护工”“过道中的杂役”这类位置描述，但不要给群体成员起甲乙丙式名字，也不要把它们写进 imageRefMap。\n- 原文或修正稿里出现未命名小角色时，必须映射到现有群体角色参考图；如果没有对应参考图，只能作为背景人影/画外声音弱化，不得创建新的可视角色。`;
 }
 
-function buildVideoImageBudgetInstruction(imageRefs) {
+function buildVideoImageBudgetInstruction(imageRefs, maxImageReferences = 9) {
   const refs = imageRefs || [];
+  const limit = normalizeVideoImageReferenceLimit(maxImageReferences);
+  const modelLabel = limit > 9 ? 'Seedance 2.5' : 'Seedance 2.0';
   const maxImageNo = refs.reduce((max, ref, index) => {
     const imageNo = Number(ref.refId?.match(/\d+/)?.[0] || index + 1);
     return Number.isFinite(imageNo) ? Math.max(max, imageNo) : max;
   }, 0);
   const upperBound = maxImageNo || refs.length;
-  return `\n\n## 视频模型参考图上限硬约束\n- 当前分镜进入视频模型的参考图只有上方列出的 ${refs.length} 张，Seedance 2.0 全能参考模式最多支持 9 张。\n- 只能引用图片1到图片${upperBound}中已经列出的编号；不得创造、暗示或引用未列出的图片编号，尤其禁止图片10、图片11或更大编号。\n- 人物和场景一致性优先；核心剧情道具优先单独保留；普通小物件可以用文字、场景母版或 Step3 的小道具合集图承载，不得为了凑参考图把杂物拆成很多张。`;
+  return `\n\n## 视频模型参考图上限硬约束\n- 当前分镜进入视频模型的参考图只有上方列出的 ${refs.length} 张，当前选择的 ${modelLabel} 最多支持 ${limit} 张。\n- 只能引用图片1到图片${upperBound}中已经列出的编号；不得创造、暗示或引用未列出的图片编号，禁止图片${upperBound + 1}或更大编号。\n- 人物和场景一致性优先；核心剧情道具优先单独保留；普通小物件可以用文字、场景母版或 Step3 的小道具合集图承载，不得为了凑参考图把杂物拆成很多张。`;
 }
 
-function buildPropReferenceInstruction(propRefs, modeLabel) {
+function buildPropReferenceInstruction(propRefs, modeLabel, maxImageReferences = 9) {
   if (!propRefs || propRefs.length === 0) return '';
+  const limit = normalizeVideoImageReferenceLimit(maxImageReferences);
 
-  return `\n\n## 物品/道具参考图使用说明（${modeLabel}必须硬锁定）\n以下图片引用为物品/道具参考图，请在人物段中持有该物品的角色描述行内引用（格式："参考图片N中XX道具外观硬锁"），并在时间段中用(图片N)标注该物品出现：\n${propRefs.map((r) => `- ${r.refId}（${r.name}）：在持有者的人物描述中写“参考图片N中${r.name}道具外观硬锁”；时间段中用${r.refId}标注；参考图负责外观一致性，文字只补当前持有人、位置、状态和变化，不得变色、变形、消失、替换或改成同类但不同形态的物品。`).join('\n')}\n- 道具参考图优先级高于场景桌面常见物；核心剧情道具优先单独保留，小物件/配件可合并成合集图节省 Seedance 9 图预算，但合集图里的每个物件都必须清楚可辨。\n- 若参考图是高脚杯，最终提示词只需保留“高脚杯/杯脚/杯肚”等必要结构锚点，并禁止短杯、茶杯、水杯、威士忌杯等替代形态，不要重复完整材质纹理长段。\n- 同一追踪道具跨分镜不得更换容器、形状或材质；除非剧本明确写道具被替换，否则必须保持同一件物品的外观连续性。`;
+  return `\n\n## 物品/道具参考图使用说明（${modeLabel}必须硬锁定）\n以下图片引用为物品/道具参考图，请在人物段中持有该物品的角色描述行内引用（格式："参考图片N中XX道具外观硬锁"），并在时间段中用(图片N)标注该物品出现：\n${propRefs.map((r) => `- ${r.refId}（${r.name}）：在持有者的人物描述中写“参考图片N中${r.name}道具外观硬锁”；时间段中用${r.refId}标注；参考图负责外观一致性，文字只补当前持有人、位置、状态和变化，不得变色、变形、消失、替换或改成同类但不同形态的物品。`).join('\n')}\n- 道具参考图优先级高于场景桌面常见物；核心剧情道具优先单独保留，小物件/配件可合并成合集图节省 Seedance ${limit} 图预算，但合集图里的每个物件都必须清楚可辨。\n- 若参考图是高脚杯，最终提示词只需保留“高脚杯/杯脚/杯肚”等必要结构锚点，并禁止短杯、茶杯、水杯、威士忌杯等替代形态，不要重复完整材质纹理长段。\n- 同一追踪道具跨分镜不得更换容器、形状或材质；除非剧本明确写道具被替换，否则必须保持同一件物品的外观连续性。`;
 }
 
 const EXECUTABLE_SHORT_DRAMA_PROMPT_RULES = `

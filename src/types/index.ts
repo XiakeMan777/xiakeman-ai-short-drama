@@ -614,7 +614,7 @@ export type VideoProductionMode = 'normal' | 'extend';
 export interface VideoApiConfig {
   backend: VideoBackendType;       // 后端类型：seedance（本地小云雀）/ seedancecloud（虾客漫SD2）/ xyqagent（小云雀 Agent）/ hmapi（HM 官方）/ volcengine（火山方舟官方）/ aliyunbailian（百炼 HappyHorse）
   // 通用视频参数
-  videoDuration: number;           // 视频时长（秒），作为分镜未写时长时的兜底；所有视频模型统一支持 4~15
+  videoDuration: number;           // 视频时长（秒），作为分镜未写时长时的兜底；Seedance 2.5 可到 30 秒，其他当前模型到 15 秒
   videoRatio: string;              // 宽高比，如 '9:16'、'16:9'、'1:1'
   videoResolution: '480p' | '720p' | '1080p' | '4k';  // 分辨率，默认 720p
   // Seedance（本地小云雀）配置
@@ -633,7 +633,7 @@ export interface VideoApiConfig {
   useVideoExtension?: boolean;
   /** @deprecated 旧项目兼容字段；请使用 useVideoExtension */
   seedanceUseVideoExtension?: boolean;
-  /** 火山方舟官方 reference_audio 公共 URL，一行一个，最多提交 3 个 */
+  /** 火山方舟官方 reference_audio 公共 URL；2.0 最多 3 个，2.5 最多 10 个 */
   volcReferenceAudioUrls?: string[];
   /** 角色配音参考总开关；关闭后 Step4 不改提示词，Step5 不提交角色音频参考 */
   characterVoiceReferencesEnabled?: boolean;
@@ -644,7 +644,7 @@ export interface VideoApiConfig {
   hmapiModel: string;
   volcBaseUrl: string;             // 火山方舟 API 地址，默认 https://ark.cn-beijing.volces.com/api/v3
   volcApiKey: string;              // 火山方舟 API Key
-  volcModel: string;               // 默认 doubao-seedance-2-0-fast-260128
+  volcModel: string;               // 火山方舟 Model ID；Seedance 2.5 为 doubao-seedance-2-5-260628
   volcGenerateAudio: boolean;      // 是否生成音频，默认 false
   aliyunApiKey: string;            // 阿里云百炼 DashScope API Key
   aliyunModel: string;             // 默认 happyhorse-1.0-r2v
@@ -1180,7 +1180,7 @@ export interface StoryboardState {
   choreoCheckFixes?: ChoreoCheckFix[];  // 编排方案逻辑检查修正记录（来自步骤 4.3.5 choreo-check）
   imageRefs: ImageReference[];       // 图片引用分配
   videoImageRefs?: ImageReference[];  // Step5：仅本次视频提交使用的参考图覆盖，不影响 Step4 回退/刷新判断
-  videoImageBudget?: VideoImageBudgetState; // Step4：视频模型 9 张参考图预算结果
+  videoImageBudget?: VideoImageBudgetState; // Step4：按所选视频模型计算的参考图预算结果
   referenceVideo?: StoryboardReferenceVideoConfig; // Step5：火山方舟公网 reference_video URL（单分镜）
   prompt: StoryboardPrompt | null;   // 生成的提示词
   selfCheckResult: SelfCheckResult | null; // 自检结果

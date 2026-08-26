@@ -836,7 +836,7 @@ function buildChoreographUserPrompt(data) {
   const imageRefText = imageRefs.map(formatImageReferenceLine).join('\n');
   const outfitRefNote = buildOutfitReferenceInstruction(imageRefs, '动作编排时');
   const visualCharacterRefNote = buildVisualCharacterReferenceInstruction(imageRefs, '动作编排时');
-  const videoImageBudgetNote = buildVideoImageBudgetInstruction(imageRefs);
+  const videoImageBudgetNote = buildVideoImageBudgetInstruction(imageRefs, data.maxImageReferences);
   const prevInfo = prevLastFrameInfo
     ? `\n## 上一分镜落幅画面信息\n${prevLastFrameInfo}\n→ ⚠️ 禁止使用"承接上一镜""续上一镜"等模糊引用词，必须将上一分镜落幅的具体状态（肢体位置、道具持有、朝向）显式重写为本分镜开场描述的一部分`
     : '';

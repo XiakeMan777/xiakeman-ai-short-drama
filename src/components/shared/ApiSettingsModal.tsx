@@ -32,6 +32,13 @@ import { testTtsConnection } from '@/lib/mimoTtsClient';
 import { normalizeImageApiConfig, normalizeVideoApiConfig } from '@/lib/storage';
 import { DEFAULT_VOLC_API_BASE } from '@/lib/volcengineApiClient';
 import {
+  getVolcVideoDurationOptions,
+  getVolcVideoModelCapabilities,
+  normalizeVolcVideoDuration,
+  VOLC_VIDEO_MODEL_OPTIONS,
+} from '@/lib/volcengineVideoModels';
+import { getStoryboardVoiceReferenceLimit } from '@/lib/characterVoiceReferences';
+import {
   buildSeedanceFetchInit,
   DEFAULT_SEEDANCE_CLOUD_API_BASE,
   SEEDANCE_SERVICE_DURATIONS,
@@ -145,7 +152,14 @@ function ApiSettingsContent({
     ?? SEEDANCE_SERVICE_VISIBLE_MODEL_OPTIONS[0];
   const selectedSeedanceResolutions = getSeedanceResolutionOptions(normalizedSeedanceModel);
   const visibleVideoResolutions = isSeedanceCloudBackend ? selectedSeedanceResolutions : VIDEO_RESOLUTION_OPTIONS;
-  const effectiveVideoDuration = normalizeSeedanceServiceDuration(localVideoConfig.videoDuration);
+  const volcCapabilities = getVolcVideoModelCapabilities(localVideoConfig.volcModel);
+  const voiceReferenceLimit = getStoryboardVoiceReferenceLimit(localVideoConfig);
+  const effectiveVideoDuration = isVolcBackend
+    ? normalizeVolcVideoDuration(localVideoConfig.videoDuration, 10, localVideoConfig.volcModel)
+    : normalizeSeedanceServiceDuration(localVideoConfig.videoDuration);
+  const videoDurationOptions = isVolcBackend
+    ? getVolcVideoDurationOptions(localVideoConfig.volcModel)
+    : [...SEEDANCE_SERVICE_DURATIONS];
   const isApimartImage = isApimartImageConfig(localImageConfig.baseUrl);
   const isXiakemanArtlistImage = isXiakemanArtlistImageConfig(localImageConfig.baseUrl);
   const isApimartOfficialImage = isApimartGptImage2OfficialModel(localImageConfig.model);
@@ -648,7 +662,7 @@ function ApiSettingsContent({
                     <div className="space-y-1">
                       <Label htmlFor="videoDuration">视频时长（秒）</Label>
                       <div id="videoDuration" className="grid grid-cols-4 gap-1.5">
-                        {SEEDANCE_SERVICE_DURATIONS.map((duration) => (
+                        {videoDurationOptions.map((duration) => (
                           <button
                             key={duration}
                             type="button"
@@ -664,7 +678,9 @@ function ApiSettingsContent({
                         ))}
                       </div>
                       <p className="text-[10px] text-muted-foreground">
-                        所有视频模型统一支持 4~15 秒整数；Step5 提交时会优先使用当前分镜在 Step4 中写明的时长。
+                        {isVolcBackend && volcCapabilities.isSeedance25
+                          ? 'Seedance 2.5 支持 4~30 秒整数；Step5 提交时会优先使用当前分镜在 Step4 中写明的时长。'
+                          : '当前模型支持 4~15 秒整数；Step5 提交时会优先使用当前分镜在 Step4 中写明的时长。'}
                       </p>
                     </div>
                     <div className="space-y-1">
@@ -886,7 +902,7 @@ function ApiSettingsContent({
                         启用角色配音参考
                       </Label>
                       <p className="text-xs leading-4 text-cyan-800 dark:text-cyan-100/80">
-                        开启后 Step4 会把最多 3 位实际开口角色写入 Seedance 提交词；Step5 小云雀和火山方舟都提交音频参考。关闭后不改提示词，也不提交声线媒体。
+                        开启后 Step4 会把最多 {voiceReferenceLimit} 位实际开口角色写入 Seedance 提交词；Step5 会按当前后端和模型上限提交音频参考。关闭后不改提示词，也不提交声线媒体。
                       </p>
                     </div>
                   </div>
@@ -1210,9 +1226,9 @@ function ApiSettingsContent({
                 {isVolcBackend && (
                   <section className="space-y-3 rounded-xl border border-orange-200 bg-orange-50 p-3 text-sm text-orange-800 dark:border-orange-500/25 dark:bg-orange-500/10 dark:text-orange-100">
                     <div>
-                      <p className="font-medium mb-1">火山方舟 · Seedance 2.0 官方 API</p>
+                      <p className="font-medium mb-1">火山方舟 · Seedance 官方 API</p>
                       <p className="text-xs text-orange-700 dark:text-orange-100/80">
-                        字节跳动火山方舟平台官方 Seedance 2.0 接口，支持文生视频、图生视频、视频生视频。
+                        字节跳动火山方舟平台官方 Seedance 2.0 / 2.5 接口，支持文生视频、图生视频、视频生视频和全模态参考。
                         需在 <a href="https://console.volcengine.com/ark" target="_blank" rel="noopener" className="underline">火山方舟控制台</a> 开通模型并获取 API Key。
                       </p>
                     </div>
@@ -1262,16 +1278,20 @@ function ApiSettingsContent({
                         <Select
                           value={localVideoConfig.volcModel}
                           onValueChange={(val) =>
-                            setLocalVideoConfig((prev) => ({ ...prev, volcModel: val }))
+                            setLocalVideoConfig((prev) => ({
+                              ...prev,
+                              volcModel: val,
+                              videoDuration: normalizeVolcVideoDuration(prev.videoDuration, 10, val),
+                            }))
                           }
                         >
                           <SelectTrigger id="volcModel" className="w-full min-w-0">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="doubao-seedance-2-0-260128-fast">Seedance 2.0 Fast（当前默认）</SelectItem>
-                            <SelectItem value="doubao-seedance-2-0-fast-260128">Seedance 2.0 Fast（快速）</SelectItem>
-                            <SelectItem value="doubao-seedance-2-0-260128">Seedance 2.0 标准</SelectItem>
+                            {VOLC_VIDEO_MODEL_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -1294,8 +1314,12 @@ function ApiSettingsContent({
                       当前端点：{localVideoConfig.volcBaseUrl || DEFAULT_VOLC_API_BASE}
                     </p>
                     <div className="rounded-xl border border-green-200 bg-green-50 p-3 text-xs text-green-700 dark:border-green-500/25 dark:bg-green-500/10 dark:text-green-100">
-                      <p className="font-medium mb-0.5">💡 全能参考多参模式</p>
-                      <p>官方通道会按 content 顺序提交最多 9 张 reference_image、3 个 reference_video、3 个 reference_audio。Step5 会自动为同场景连续镜头选择视频1/2/3；音频参考需填写公网 URL。</p>
+                      <p className="font-medium mb-0.5">全模态参考</p>
+                      <p>
+                        当前模型会按 content 顺序提交最多 {volcCapabilities.maxImages} 张 reference_image、{volcCapabilities.maxVideos} 个 reference_video、{volcCapabilities.maxAudios} 个 reference_audio。
+                        {volcCapabilities.isSeedance25 ? ' 2.5 的三类素材合计最多 50 个。' : ' 旧模型限制保持不变。'}
+                        同场景连续镜头会自动优先选择上一镜视频作为续写参考；音频参考需使用公网 URL。
+                      </p>
                     </div>
                   </section>
                 )}

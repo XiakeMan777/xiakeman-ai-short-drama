@@ -54,6 +54,7 @@ import {
   supportsVideoExtensionBackend,
 } from './videoExtensionConfig';
 import { isSeedanceServiceBackend } from '@/lib/seedanceApi';
+import { getVolcVideoModelCapabilities } from '@/lib/volcengineVideoModels';
 import { ErrorDetailPanel } from './ErrorDetailPanel';
 import {
   buildCompactVideoPromptDisabledReason,
@@ -80,7 +81,6 @@ import {
   hasOfficialVirtualHumanVideoReferences,
   resolveVideoReferenceAssets,
   validateVideoPromptReferenceBindings,
-  VIDEO_REFERENCE_LIMIT,
   type EffectiveVideoReferenceItem,
 } from './videoReferenceResolver';
 import { formatElapsed, formatVideoDuration, getVideoState } from './videoUtils';
@@ -304,6 +304,9 @@ export function StoryboardVideoCard({
   const isDone = videoState.status === 'done';
   const isFailed = videoState.status === 'failed';
   const isTextAuditFailure = isFailed && isLikelyTextAuditFailure(videoState.error ?? undefined);
+  const volcCapabilities = getVolcVideoModelCapabilities(videoConfig.volcModel);
+  const imageReferenceLimit = videoBackend === 'volcengine' ? volcCapabilities.maxImages : 9;
+  const videoReferenceLimit = videoBackend === 'volcengine' ? volcCapabilities.maxVideos : 3;
 
   const storyboardBoardReference = useMemo(
     () => resolveStoryboardBoardVideoReferenceState(sb),
@@ -327,9 +330,10 @@ export function StoryboardVideoCard({
         includeScenePositionBoard: false,
         useStoryboardBoardReferencePack: isDirectorMode,
         finalVideoPrompt: sb.seedanceFinalVideoPrompt?.trim() || sb.prompt?.rawText?.trim(),
+        imageReferenceLimit,
       },
     ),
-    [imageRefs, assetLibrary, storyboardBoardReference, sb.scenePositionBoard, videoRatio, isDirectorMode, sb.seedanceFinalVideoPrompt, sb.prompt?.rawText],
+    [imageRefs, assetLibrary, storyboardBoardReference, sb.scenePositionBoard, videoRatio, isDirectorMode, sb.seedanceFinalVideoPrompt, sb.prompt?.rawText, imageReferenceLimit],
   );
   const includeStoryboardBoardInPrompt = storyboardBoardReference.enabled && referenceResolution.storyboardBoardIncluded;
   const storyboardBoardBlockingReason = storyboardBoardReference.available
@@ -342,7 +346,7 @@ export function StoryboardVideoCard({
 
   const storyboardBoardSwitchDisabled = isDirectorMode || (!sb.useStoryboardBoardReference && !!storyboardBoardBlockingReason);
   const storyboardBoardRefLabel = referenceResolution.storyboardBoardRefId
-    ?? `参考图片${Math.min(referenceResolution.effectiveItems.length + 1, VIDEO_REFERENCE_LIMIT)}`;
+    ?? `参考图片${Math.min(referenceResolution.effectiveItems.length + 1, imageReferenceLimit)}`;
   const storyboardBoardSequenceLabel = isShotPlanBoardMode(storyboardBoardReference.selectedMode)
     ? `S01-S${String(storyboardBoardVariant?.plan?.panels.length || 15).padStart(2, '0')}`
     : 'S01-S09';
@@ -413,8 +417,8 @@ export function StoryboardVideoCard({
   });
   const promptLengthMismatchReason = promptLengthValidation.ok ? null : promptLengthValidation.reason;
   const promptReferenceBindingValidation = useMemo(
-    () => validateVideoPromptReferenceBindings(finalPreviewPrompt, referenceResolution.effectiveItems),
-    [finalPreviewPrompt, referenceResolution.effectiveItems],
+    () => validateVideoPromptReferenceBindings(finalPreviewPrompt, referenceResolution.effectiveItems, imageReferenceLimit),
+    [finalPreviewPrompt, referenceResolution.effectiveItems, imageReferenceLimit],
   );
   const promptReferenceBindingMismatchDetail = promptReferenceBindingValidation.valid
     ? null
@@ -444,7 +448,7 @@ export function StoryboardVideoCard({
     : videoContinuityDecision?.mode === 'extend'
       ? (videoContinuityDecision.blockingReason
           ?? (videoBackend === 'volcengine'
-              ? `${extensionBackendLabel} 将把分镜 ${typeof videoContinuityDecision.sourceIndex === 'number' ? videoContinuityDecision.sourceIndex + 1 : '?'} 作为视频1直接续写，并自动补充同场景近邻完成视频作为视频2/3，保持空间、站位和表演连续。`
+              ? `${extensionBackendLabel} 将把分镜 ${typeof videoContinuityDecision.sourceIndex === 'number' ? videoContinuityDecision.sourceIndex + 1 : '?'} 作为视频1直接续写，并自动补充同场景近邻完成视频作为视频2..${videoReferenceLimit}，保持空间、站位和表演连续。`
               : `${extensionBackendLabel} 将从分镜 ${typeof videoContinuityDecision.sourceIndex === 'number' ? videoContinuityDecision.sourceIndex + 1 : '?'} 的完成视频继续延长，保持同场景站位。`))
       : (videoContinuityDecision?.reason ?? '本镜作为连续镜组起点，先正常生成源视频。');
   const continuityTone = extensionEnabled && videoContinuityDecision?.mode === 'extend'
@@ -489,7 +493,7 @@ export function StoryboardVideoCard({
         : sb.useCompactVideoPrompt && compactPromptDisabledReason
           ? compactPromptDisabledReason
           : referenceResolution.exceedsLimit
-            ? buildVideoReferenceLimitMessage(referenceResolution.totalRefs)
+            ? buildVideoReferenceLimitMessage(referenceResolution.totalRefs, imageReferenceLimit)
             : referenceResolution.missing.length > 0
               ? buildMissingVideoReferenceMessage(referenceResolution.missing)
               : referenceResolution.promptOrder.checked && !referenceResolution.promptOrder.valid
@@ -782,7 +786,7 @@ export function StoryboardVideoCard({
               <span className="font-semibold">{title}</span>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-              <span>参考图 {effectiveReferenceCount}/{VIDEO_REFERENCE_LIMIT} 张</span>
+              <span>参考图 {effectiveReferenceCount}/{imageReferenceLimit} 张</span>
               {referenceResolution.budget.compressed && (
                 <>
                   <span>·</span>
@@ -1044,7 +1048,7 @@ export function StoryboardVideoCard({
         {referenceResolution.budget.compressed && (
           <div className="mt-3 rounded-2xl border border-blue-200/70 bg-blue-50/80 px-3 py-2.5 text-xs text-blue-800 dark:border-blue-400/25 dark:bg-blue-500/10 dark:text-blue-100">
             <div className="font-semibold">
-              已启用智能参考图预算：{referenceResolution.budget.originalTotalRefs} 张压缩为 {effectiveReferenceCount}/{VIDEO_REFERENCE_LIMIT} 张
+              已启用智能参考图预算：{referenceResolution.budget.originalTotalRefs} 张压缩为 {effectiveReferenceCount}/{imageReferenceLimit} 张
             </div>
             <div className="mt-1 leading-relaxed">
               {referenceResolution.budget.omittedItems.slice(0, 4).map((item) => item.message).join('；')}
@@ -1074,7 +1078,7 @@ export function StoryboardVideoCard({
             <div className="font-semibold">参考图未就绪，当前分镜不应重新生成视频</div>
             <div className="mt-1 leading-relaxed">
               {referenceResolution.exceedsLimit
-                ? buildVideoReferenceLimitMessage(referenceResolution.totalRefs)
+                ? buildVideoReferenceLimitMessage(referenceResolution.totalRefs, imageReferenceLimit)
                 : buildMissingVideoReferenceMessage(referenceResolution.missing)}
             </div>
           </div>
@@ -1110,7 +1114,7 @@ export function StoryboardVideoCard({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="font-semibold">单镜 reference_video URL</div>
               <Badge variant="outline" className="rounded-full bg-white/70 text-[10px] dark:bg-white/5">
-                {validReferenceVideoCount}/3
+                {validReferenceVideoCount}/{videoReferenceLimit}
               </Badge>
             </div>
             <Textarea
@@ -1120,13 +1124,13 @@ export function StoryboardVideoCard({
                   .split(/\r?\n/)
                   .map((url) => url.trim())
                   .filter(Boolean)
-                  .slice(0, 3),
+                  .slice(0, videoReferenceLimit),
               )}
               placeholder="https://example.com/action-reference.mp4"
               className="mt-2 min-h-[68px] resize-y text-xs"
             />
             <div className="mt-1 leading-5 text-muted-foreground">
-              仅提交公网 URL，最多 3 个；会和同场景续写自动 reference_video 去重，优先保留续写源视频。
+              仅提交公网 URL，最多 {videoReferenceLimit} 个；会和同场景续写自动 reference_video 去重，优先保留续写源视频。
             </div>
             {invalidReferenceVideoCount > 0 && (
               <div className="mt-1 text-[11px] text-amber-600 dark:text-amber-200">
@@ -1180,7 +1184,7 @@ export function StoryboardVideoCard({
                 <div className="mt-2 text-xs text-amber-600 dark:text-amber-200">{storyboardBoardBlockingReason}</div>
               ) : storyboardBoardBudgetOmitted ? (
                 <div className="mt-2 text-xs text-blue-600 dark:text-blue-200">
-                  已开启，但因 9 张上限本次自动让位；角色、场景和道具参考图优先。
+                  已开启，但因 {imageReferenceLimit} 张上限本次自动让位；角色、场景和道具参考图优先。
                 </div>
               ) : (
                 <div className="mt-2 text-xs text-emerald-600 dark:text-emerald-200">
@@ -1191,7 +1195,7 @@ export function StoryboardVideoCard({
               <div className="mt-2 text-xs text-muted-foreground">{storyboardBoardBlockingReason}</div>
             ) : (
               <div className="mt-2 text-xs text-muted-foreground">
-                当前详细九宫格可用，开启后优先作为 {storyboardBoardRefLabel} 参与本次视频生成；若超过 9 张，会自动让位给角色、场景和道具参考图。
+                当前详细九宫格可用，开启后优先作为 {storyboardBoardRefLabel} 参与本次视频生成；若超过 {imageReferenceLimit} 张，会自动让位给角色、场景和道具参考图。
               </div>
             )}
             {storyboardBoardReference.enabled && storyboardBoardReference.available && (

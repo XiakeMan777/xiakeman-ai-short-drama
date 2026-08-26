@@ -21,6 +21,13 @@ import {
   SEEDANCE_SERVICE_VISIBLE_MODEL_OPTIONS,
 } from '@/lib/seedanceApi';
 import { normalizeFrameRatio } from '@/lib/frameRatio';
+import { volcGenerateVideo } from '@/lib/volcengineApiClient';
+import {
+  getVolcVideoDurationOptions,
+  getVolcVideoModelCapabilities,
+  normalizeVolcVideoDuration,
+  VOLC_VIDEO_MODEL_OPTIONS,
+} from '@/lib/volcengineVideoModels';
 import {
   canUseStep5BackendVideoJobs,
   pollStep5BackendJobUntilDone,
@@ -253,6 +260,44 @@ export async function submitSeedanceBackendWorkbenchJob(input: {
   return { videoUrl: result.videoUrl, taskId: result.providerTaskId || submitted.job.id, mode: '后台任务' as const };
 }
 
+async function submitVolcStandalone(input: {
+  prompt: string;
+  files: File[];
+  videoConfig: VideoApiConfig;
+  duration: number;
+  ratio: string;
+  resolution: VideoResolution;
+  signal: AbortSignal;
+  onStatus: (text: string, progress?: number) => void;
+}) {
+  let taskId = '';
+  const resolution = input.resolution === '4k' ? '1080p' : input.resolution;
+  const videoUrl = await volcGenerateVideo(
+    { ...input.videoConfig, backend: 'volcengine' },
+    input.prompt,
+    input.files,
+    {
+      duration: input.duration,
+      ratio: normalizeFrameRatio(input.ratio),
+      resolution,
+      generateAudio: input.videoConfig.volcGenerateAudio,
+      omniReferenceTaskType: 'reference',
+      outputFormat: 'mp4',
+      signal: input.signal,
+      onSubmitted: (submittedTaskId) => {
+        taskId = submittedTaskId;
+        input.onStatus(`火山方舟任务已提交：${submittedTaskId}`, 10);
+      },
+      onProgress: (detail) => {
+        input.onStatus(`火山方舟：${detail.statusLabel}`, detail.progress);
+      },
+    },
+  );
+  if (input.signal.aborted) throw new DOMException('The user aborted a request.', 'AbortError');
+  if (!videoUrl) throw new Error('火山方舟任务完成但未返回视频地址。');
+  return { videoUrl, taskId, mode: '前端直连' as const };
+}
+
 export function VideoWorkbench() {
   const { state, currentProject } = useCurrentProject();
   const [prompt, setPrompt] = useState('');
@@ -263,6 +308,7 @@ export function VideoWorkbench() {
   const [seedanceModel, setSeedanceModel] = useState<SeedanceServiceModel>(
     normalizeVisibleSeedanceServiceModel(state.videoApiConfig.seedanceModel),
   );
+  const [volcModel, setVolcModel] = useState(state.videoApiConfig.volcModel);
   const [resolution, setResolution] = useState<VideoResolution>(state.videoApiConfig.videoResolution || '720p');
   const [statusText, setStatusText] = useState('');
   const [progress, setProgress] = useState(0);
@@ -273,6 +319,12 @@ export function VideoWorkbench() {
   const abortRef = useRef<AbortController | null>(null);
 
   const supportsSeedanceModel = isSeedanceServiceBackend(backend);
+  const supportsStandaloneGeneration = supportsSeedanceModel || backend === 'volcengine';
+  const volcCapabilities = getVolcVideoModelCapabilities(volcModel);
+  const imageReferenceLimit = backend === 'volcengine' ? volcCapabilities.maxImages : 9;
+  const durationOptions = backend === 'volcengine'
+    ? getVolcVideoDurationOptions(volcModel)
+    : [4, 5, 6, 8, 10, 12, 15];
   const backendLabel = backend === 'seedancecloud'
     ? '虾客漫 SD2 / Seedance'
     : backend === 'seedance'
@@ -288,11 +340,14 @@ export function VideoWorkbench() {
               : '当前视频服务';
   const unsupportedReason = backend === 'hmapi'
     ? 'HM 视频接口已弃用，请在 API 设置中切换到虾客漫 SD2 或 Seedance 后再使用视频工作台。'
-    : supportsSeedanceModel
+    : supportsStandaloneGeneration
       ? ''
-      : '当前视频服务暂未接入独立视频工作台，请在 API 设置中切换到虾客漫 SD2 / Seedance，或继续在 Step5 中生成视频。';
-  const canSubmit = prompt.trim().length >= 8 && files.length > 0 && !running && supportsSeedanceModel;
+      : '当前视频服务暂未接入独立视频工作台，请在 API 设置中切换到火山方舟或虾客漫 SD2 / Seedance，或继续在 Step5 中生成视频。';
+  const canSubmit = prompt.trim().length >= 8 && files.length > 0 && !running && supportsStandaloneGeneration;
   const seedanceResolutionOptions = getSeedanceResolutionOptions(seedanceModel);
+  const workbenchResolutionOptions: readonly VideoResolution[] = backend === 'volcengine'
+    ? ['480p', '720p', '1080p']
+    : seedanceResolutionOptions;
 
   useEffect(() => () => {
     revokeLocalMediaFiles(files);
@@ -305,21 +360,30 @@ export function VideoWorkbench() {
     setRatio(state.videoApiConfig.videoRatio || '16:9');
     const nextModel = normalizeVisibleSeedanceServiceModel(state.videoApiConfig.seedanceModel);
     setSeedanceModel(nextModel);
+    setVolcModel(state.videoApiConfig.volcModel);
     setResolution(normalizeSeedanceServiceResolution(nextModel, state.videoApiConfig.videoResolution || '720p'));
   }, [state.videoApiConfig]);
 
   const modelLabel = useMemo(() => {
     if (backend === 'hmapi') return state.videoApiConfig.hmapiModel || 'HM API';
     if (backend === 'xyqagent') return '虾客漫 Agent';
-    if (backend === 'volcengine') return state.videoApiConfig.volcModel || '火山方舟视频';
+    if (backend === 'volcengine') return volcModel || '火山方舟视频';
     if (backend === 'aliyunbailian') return state.videoApiConfig.aliyunModel || '阿里云百炼视频';
     return seedanceModel;
-  }, [backend, seedanceModel, state.videoApiConfig.aliyunModel, state.videoApiConfig.hmapiModel, state.videoApiConfig.volcModel]);
+  }, [backend, seedanceModel, state.videoApiConfig.aliyunModel, state.videoApiConfig.hmapiModel, volcModel]);
 
   const handleFiles = (fileList: FileList | null) => {
     if (!fileList?.length) return;
-    const next = createLocalMediaFiles(fileList, '参考图');
-    setFiles((prev) => [...prev, ...next].slice(0, 9));
+    const incoming = createLocalMediaFiles(fileList, '参考图');
+    setFiles((prev) => {
+      const available = Math.max(0, imageReferenceLimit - prev.length);
+      const accepted = incoming.slice(0, available).map((item, index) => ({
+        ...item,
+        label: `参考图${prev.length + index + 1}`,
+      }));
+      revokeLocalMediaFiles(incoming.slice(available));
+      return [...prev, ...accepted];
+    });
   };
 
   const setStatus = (text: string, nextProgress?: number) => {
@@ -337,7 +401,9 @@ export function VideoWorkbench() {
       createdAt: Date.now(),
       backend,
       model: modelLabel,
-      duration: normalizeSeedanceServiceDuration(duration),
+      duration: backend === 'volcengine'
+        ? normalizeVolcVideoDuration(duration, state.videoApiConfig.videoDuration, volcModel)
+        : normalizeSeedanceServiceDuration(duration),
       ratio,
       referenceCount: files.length,
       taskId: providerTaskId,
@@ -363,20 +429,35 @@ export function VideoWorkbench() {
       let resultUrl = '';
       let providerTaskId = '';
       let mode: VideoHistoryItem['mode'] = '前端直连';
-      const selectedDuration = normalizeSeedanceServiceDuration(duration);
-      const selectedResolution = normalizeSeedanceServiceResolution(seedanceModel, resolution);
-      if (!supportsSeedanceModel) throw new Error(unsupportedReason || '当前视频服务暂不支持视频工作台');
+      const selectedDuration = backend === 'volcengine'
+        ? normalizeVolcVideoDuration(duration, state.videoApiConfig.videoDuration, volcModel)
+        : normalizeSeedanceServiceDuration(duration);
+      const selectedResolution = supportsSeedanceModel
+        ? normalizeSeedanceServiceResolution(seedanceModel, resolution)
+        : resolution;
+      if (!supportsStandaloneGeneration) throw new Error(unsupportedReason || '当前视频服务暂不支持视频工作台');
       const videoConfig: VideoApiConfig = {
         ...state.videoApiConfig,
         backend,
         videoRatio: ratio,
         videoDuration: selectedDuration,
         seedanceModel,
+        volcModel,
         videoResolution: selectedResolution,
       };
-      const canUseBackendJob = currentProject ? await canUseStep5BackendVideoJobs(videoConfig) : false;
-      const submitted = canUseBackendJob && currentProject
-        ? await submitSeedanceBackendWorkbenchJob({
+      const submitted = backend === 'volcengine'
+        ? await submitVolcStandalone({
+            prompt: prompt.trim(),
+            files: files.map((file) => file.file),
+            videoConfig,
+            duration: selectedDuration,
+            ratio,
+            resolution: selectedResolution,
+            signal: abortCtrl.signal,
+            onStatus: setStatus,
+          })
+        : currentProject && await canUseStep5BackendVideoJobs(videoConfig)
+          ? await submitSeedanceBackendWorkbenchJob({
             project: currentProject,
             prompt: prompt.trim(),
             files: files.map((file) => file.file),
@@ -387,8 +468,8 @@ export function VideoWorkbench() {
             resolution: selectedResolution,
             signal: abortCtrl.signal,
             onStatus: setStatus,
-          })
-        : await submitSeedanceStandalone({
+            })
+          : await submitSeedanceStandalone({
             prompt: prompt.trim(),
             files: files.map((file) => file.file),
             videoConfig,
@@ -483,7 +564,7 @@ export function VideoWorkbench() {
               <Select value={duration} onValueChange={setDuration}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {[4, 5, 6, 8, 10, 12, 15].map((value) => (
+                  {durationOptions.map((value) => (
                     <SelectItem key={value} value={String(value)}>{value} 秒</SelectItem>
                   ))}
                 </SelectContent>
@@ -509,13 +590,32 @@ export function VideoWorkbench() {
                 </Select>
               </Label>
             )}
-            {supportsSeedanceModel && (
+            {backend === 'volcengine' && (
+              <Label className="xkm-field">
+                <span>火山模型</span>
+                <Select
+                  value={volcModel}
+                  onValueChange={(nextModel) => {
+                    setVolcModel(nextModel);
+                    setDuration(String(normalizeVolcVideoDuration(duration, 10, nextModel)));
+                  }}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {VOLC_VIDEO_MODEL_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Label>
+            )}
+            {supportsStandaloneGeneration && (
               <Label className="xkm-field">
                 <span>分辨率</span>
                 <Select value={resolution} onValueChange={(value) => setResolution(value as VideoResolution)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {seedanceResolutionOptions.map((value) => (
+                    {workbenchResolutionOptions.map((value) => (
                       <SelectItem key={value} value={value}>{formatVideoResolutionLabel(value)}</SelectItem>
                     ))}
                   </SelectContent>
@@ -527,7 +627,7 @@ export function VideoWorkbench() {
           <Label className="xkm-upload-box is-wide">
             <Upload className="h-4 w-4" />
             <span>上传视频参考图</span>
-            <small>建议 1-9 张，顺序就是模型读取顺序</small>
+            <small>最多 {imageReferenceLimit} 张，顺序就是模型读取顺序</small>
             <Input type="file" accept="image/*" multiple className="hidden" onChange={(event) => handleFiles(event.target.files)} />
           </Label>
 

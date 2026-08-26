@@ -294,18 +294,18 @@ const STORYBOARD_DIRECTOR_BRIEF_SYSTEM_PROMPT = `你是一名短剧影像导演�
 
 ## 输出目标
 1. 只处理当前单个分镜，不扩写整章或其他分镜。
-2. 先判断本镜的风格、参考图职责、8+1 图片预算、镜头策略、声音策略、首尾钩子和分镜拆法。
+2. 先读取本次 payload.referenceBudget，再判断本镜的风格、参考图职责、动态图片预算、镜头策略、声音策略、首尾钩子和分镜拆法。
 3. 明确每张参考图“读取什么 / 不读取什么”，防止模型把角色参考、场景参考、道具参考拼成参考图展板。
 4. 语言要短、清楚、可执行；不要写文学赏析，不要写后台解释。
 5. 输出只允许合法 JSON 对象，不要 markdown，不要代码块。
-6. 故事板模式最终视频提交最多 9 张图，其中 1 张会被后续故事板宫格图占用，因此 Step3 参考图预算必须按最多 8 张判断。
+6. 故事板模式固定由后续故事板宫格图占用 1 张，其余 Step3 参考图数量必须严格服从本次 payload.referenceBudget.step3ReferenceSlots；不得写死为 8 张。
 7. 当 mode 是 smart-shot-plan-landscape 时，额外判断剧情节奏、动作密度、对白密度、连续性风险，并给出 6 / 9 / 12 / 15 的 recommendedPanelCount；固定 shot-plan-landscape 不使用这组智能字段。
 
 ## 必须覆盖
 - styleStatement：当前单镜的影像风格、光色、表演方向和类型气质。
 - referenceMatching：逐张参考图说明 readFor 和 doNotUseFor。
 - referenceBudget：逐张参考图输出 decision 和 reason；decision 只能是 mustKeep / preferKeep / textFallback。mustKeep 只给本镜不可缺的场景、角色或剧情关键道具；preferKeep 给有帮助但可被更高优先级挤掉的参考；textFallback 给普通小物件、背景装饰或可用文字/场景母版兜底的参考。
-- referencePriority：按当前剧情重要性从高到低排列所有参考图 refId，后续代码会用它辅助压缩到 8 张 Step3 参考图。
+- referencePriority：按当前剧情重要性从高到低排列所有参考图 refId，后续代码会按本次 payload.referenceBudget.step3ReferenceSlots 执行压缩。
 - cameraStrategy：首帧、尾帧、机位轴线、景别推进、人物站位和镜头动机。
 - soundStrategy：对白口型、环境声、动作音效、BGM 压强、声音桥。
 - hookStrategy：0-3 秒强钩子、15 秒尾钩子、下一镜可继承物。
@@ -473,6 +473,7 @@ function buildSmartStoryboardRhythmDecisionSection(data) {
 
 function buildStoryboardDirectorBriefUserPrompt(data) {
   const references = Array.isArray(data.references) ? data.references : [];
+  const step3ReferenceSlots = Math.max(1, Number(data.referenceBudget?.step3ReferenceSlots) || 8);
   const lockedSmartPanelCount = data.mode === 'smart-shot-plan-landscape' && [6, 9, 12].includes(Number(data.smartPanelCountPreference))
     ? Number(data.smartPanelCountPreference)
     : null;
@@ -551,7 +552,7 @@ ${formatJson(data.referenceBudget)}
 - styleStatement 必须继承“项目视觉风格”，只补充当前单镜的光色、表演方向和类型气质；不得自行固定成任何未声明的美术风格。
 - referenceMatching 必须覆盖上方每一张参考图；没有参考图则输出空数组。
 - referenceBudget 必须覆盖上方每一张参考图；decision 只能是 mustKeep / preferKeep / textFallback，并按当前剧情说明原因。
-- referencePriority 必须按当前剧情重要性输出所有参考图 refId；故事板模式会把 Step3 参考图压缩到最多 8 张，另 1 张留给后续宫格故事板图。
+- referencePriority 必须按当前剧情重要性输出所有参考图 refId；故事板模式会把 Step3 参考图压缩到最多 ${step3ReferenceSlots} 张，另 1 张留给后续宫格故事板图。
 - 每张参考图必须写 readFor 和 doNotUseFor，明确“读什么”和“不要继承什么”。
 - cameraStrategy 必须先锁首帧、尾帧、机位轴线、人物站位、镜头动机。
 - soundStrategy 必须写对白口型/环境声/SFX/BGM/声音桥，不要只写“有声音”。

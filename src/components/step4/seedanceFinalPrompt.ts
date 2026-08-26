@@ -38,10 +38,14 @@ export const SEEDANCE_FINAL_VIDEO_PROMPT_NO_OUTPUT_TIMEOUT_MS = 300_000;
 export const SEEDANCE_FINAL_VIDEO_PROMPT_STALE_MS = 330_000;
 export const SEEDANCE_FINAL_VIDEO_PROMPT_TIMEOUT_MESSAGE = 'Seedance 最终视频词生成超时，请重新点击刷新。';
 export const SEEDANCE_FINAL_VIDEO_PROMPT_NO_OUTPUT_TIMEOUT_MESSAGE = 'Seedance 最终视频词流式生成已超过 300 秒没有模型输出或思考活动，请检查模型连接后重试。';
-const SEEDANCE_IMAGE_REFERENCE_LIMIT = 9;
+const DEFAULT_SEEDANCE_IMAGE_REFERENCE_LIMIT = 9;
 const SEEDANCE_DIRECTOR_BOARD_REF_ID = '参考图片1';
-const SEEDANCE_VISUAL_REFERENCE_LIMIT_WITH_DIRECTOR_BOARD = SEEDANCE_IMAGE_REFERENCE_LIMIT - 1;
 const SEEDANCE_FINAL_VIDEO_PROMPT_RETRY_DELAYS_MS = [1200, 2800];
+
+function normalizeSeedanceImageReferenceLimit(value?: number) {
+  if (!Number.isFinite(value)) return DEFAULT_SEEDANCE_IMAGE_REFERENCE_LIMIT;
+  return Math.max(1, Math.min(30, Math.floor(value!)));
+}
 
 export interface SeedanceFinalPromptReference {
   refId: string;
@@ -78,12 +82,15 @@ export interface BuildSeedanceFinalPromptInput {
   projectVisualStyle?: string;
   cameraSegmentCount?: number;
   repairHint?: string;
+  /** 当前提交模型的图片参考上限；Seedance 2.5 为 30，其余默认 9。 */
+  maxImageReferences?: number;
 }
 
 export interface SeedanceFinalVideoPromptValidationContext {
   mode?: StoryboardBoardMode;
   references?: readonly SeedanceFinalPromptReference[];
   expectedPanelCount?: number;
+  maxImageReferences?: number;
 }
 
 type SeedanceFinalVideoPromptValidationSeverity = 'error' | 'warning';
@@ -395,16 +402,20 @@ function buildProjectVisualStyleAnchor(input: BuildSeedanceFinalPromptInput): st
   ], 360) || 'the current project visual style from Step0/Step2/Step3 and the Step4 board plan';
 }
 
-function buildSeedancePromptReferenceLayout(references: readonly SeedanceFinalPromptReference[]) {
+function buildSeedancePromptReferenceLayout(
+  references: readonly SeedanceFinalPromptReference[],
+  maxImageReferences = DEFAULT_SEEDANCE_IMAGE_REFERENCE_LIMIT,
+) {
+  const visualReferenceLimit = Math.max(0, normalizeSeedanceImageReferenceLimit(maxImageReferences) - 1);
   const visibleReferences = references
-    .slice(0, SEEDANCE_VISUAL_REFERENCE_LIMIT_WITH_DIRECTOR_BOARD)
+    .slice(0, visualReferenceLimit)
     .map((reference, index) => ({
       ...reference,
       originalRefId: reference.originalRefId ?? reference.refId,
       refId: `参考图片${index + 2}`,
     }));
   const omittedReferences = references
-    .slice(SEEDANCE_VISUAL_REFERENCE_LIMIT_WITH_DIRECTOR_BOARD)
+    .slice(visualReferenceLimit)
     .map((reference) => ({
       refId: reference.refId,
       type: reference.type,
@@ -586,6 +597,7 @@ function buildVoiceReferenceRules(input: BuildSeedanceFinalPromptInput) {
 }
 
 function buildSeedanceVideoExecutionContract(input: BuildSeedanceFinalPromptInput, directorBoardRefId: string) {
+  const maxImageReferences = normalizeSeedanceImageReferenceLimit(input.maxImageReferences);
   const plan = input.boardPlan;
   const directorContract = plan?.directorContract;
   const blockingContinuity = plan?.blockingContinuity;
@@ -605,10 +617,10 @@ function buildSeedanceVideoExecutionContract(input: BuildSeedanceFinalPromptInpu
     purpose: 'Convert Step4 storyboard mode into one continuous Seedance video prompt. The final text must be executable video direction, not a storyboard analysis or reference summary.',
     directorBoardRefId,
     imageReferenceNumbering: {
-      hardLimit: SEEDANCE_IMAGE_REFERENCE_LIMIT,
+      hardLimit: maxImageReferences,
       directorBoardRefId,
-      visualReferenceRange: `参考图片2..参考图片${SEEDANCE_IMAGE_REFERENCE_LIMIT}`,
-      rule: 'Image references must stay within @图片1..@图片9. Never write @图片10 or higher.',
+      visualReferenceRange: `参考图片2..参考图片${maxImageReferences}`,
+      rule: `Image references must stay within @图片1..@图片${maxImageReferences}. Never write @图片${maxImageReferences + 1} or higher.`,
     },
     projectVisualStyle,
     primaryStoryboardCharacter: getPrimaryStoryboardCharacter(input.storyboard),
@@ -691,6 +703,7 @@ function buildSeedanceVideoExecutionContract(input: BuildSeedanceFinalPromptInpu
 }
 
 function buildFinalPromptContract(input: BuildSeedanceFinalPromptInput, directorBoardRefId: string) {
+  const maxImageReferences = normalizeSeedanceImageReferenceLimit(input.maxImageReferences);
   const isShotPlanMode = isShotPlanBoardMode(input.mode);
   const expectedPanelCount = getStoryboardBoardExpectedPanelCount(
     input.mode,
@@ -714,7 +727,7 @@ function buildFinalPromptContract(input: BuildSeedanceFinalPromptInput, director
     cameraSegmentContract,
     referenceExecutionRules: [
       'Match Step3 references by refId first. If the same character has identity, outfit, official portrait, and no-face body references, keep each reference role separate.',
-      `Seedance accepts at most ${SEEDANCE_IMAGE_REFERENCE_LIMIT} image references: ${directorBoardRefId} is the director board, and Step3 visual references occupy @图片2..@图片${SEEDANCE_IMAGE_REFERENCE_LIMIT}. Never write @图片10 or any higher image slot.`,
+      `The selected video model accepts at most ${maxImageReferences} image references: ${directorBoardRefId} is the director board, and Step3 visual references occupy @图片2..@图片${maxImageReferences}. Never write @图片${maxImageReferences + 1} or any higher image slot.`,
       'Use the director board reference as the motion, blocking, camera rhythm, START FRAME, S-panel progression, transition, and END BEAT source; the final video must not preserve storyboard borders, panel numbers, arrows, labels, footer bars, or instruction text.',
       'Character sheet references are final identity/body/outfit locks only; never describe or generate their FRONT VIEW/BACK VIEW/COSTUME DETAIL layout as video content.',
       `Reference style transfer is forbidden: read every reference for identity, shape, material, and motion locks only, then render the final video in the current project visual style (${projectVisualStyle}); do not hardcode any undeclared visual medium or aesthetic unless the current project style explicitly asks for it.`,
@@ -775,22 +788,23 @@ function buildSnapshotPayload(input: BuildSeedanceFinalPromptInput, repairHint?:
   const storyboard = input.storyboard;
   const effectiveDurationSeconds = resolveStoryboardVideoDuration(storyboard, storyboard.storyboard.duration);
   const effectiveDurationText = `${effectiveDurationSeconds}秒`;
-  const referenceLayout = buildSeedancePromptReferenceLayout(input.references);
+  const maxImageReferences = normalizeSeedanceImageReferenceLimit(input.maxImageReferences);
+  const referenceLayout = buildSeedancePromptReferenceLayout(input.references, maxImageReferences);
   const promptInput: BuildSeedanceFinalPromptInput = {
     ...input,
     references: referenceLayout.references,
   };
   const { directorBoardRefId } = referenceLayout;
   return {
-    schemaVersion: 15,
+    schemaVersion: 16,
     mode: input.mode,
     frameRatio: normalizeFrameRatio(input.frameRatio),
     projectVisualStyle: buildProjectVisualStyleAnchor(promptInput),
     imageReferenceNumbering: {
-      hardLimit: SEEDANCE_IMAGE_REFERENCE_LIMIT,
+      hardLimit: maxImageReferences,
       directorBoardRefId,
-      visualReferenceRange: `参考图片2..参考图片${SEEDANCE_IMAGE_REFERENCE_LIMIT}`,
-      rule: 'Do not mention @图片10 or any higher image reference.',
+      visualReferenceRange: `参考图片2..参考图片${maxImageReferences}`,
+      rule: `Do not mention @图片${maxImageReferences + 1} or any higher image reference.`,
     },
     finalPromptContract: buildFinalPromptContract(promptInput, directorBoardRefId),
     videoExecutionContract: buildSeedanceVideoExecutionContract(promptInput, directorBoardRefId),
@@ -921,6 +935,7 @@ function parseSeedanceFinalPromptValidationContext(snapshot?: string): SeedanceF
       references?: SeedanceFinalPromptReference[];
       storyboard?: { duration?: string };
       boardPlan?: { panels?: unknown[] };
+      imageReferenceNumbering?: { hardLimit?: number };
     };
     const expectedPanelCount = parsed.mode
       ? getStoryboardBoardExpectedPanelCount(
@@ -933,6 +948,7 @@ function parseSeedanceFinalPromptValidationContext(snapshot?: string): SeedanceF
       mode: parsed.mode,
       references: Array.isArray(parsed.references) ? parsed.references : undefined,
       expectedPanelCount,
+      maxImageReferences: parsed.imageReferenceNumbering?.hardLimit,
     };
   } catch {
     return undefined;
@@ -942,7 +958,8 @@ function parseSeedanceFinalPromptValidationContext(snapshot?: string): SeedanceF
 function buildSeedanceFinalPromptValidationContext(
   input: BuildSeedanceFinalPromptInput,
 ): SeedanceFinalVideoPromptValidationContext {
-  const referenceLayout = buildSeedancePromptReferenceLayout(input.references);
+  const maxImageReferences = normalizeSeedanceImageReferenceLimit(input.maxImageReferences);
+  const referenceLayout = buildSeedancePromptReferenceLayout(input.references, maxImageReferences);
   return {
     mode: input.mode,
     references: referenceLayout.references,
@@ -951,6 +968,7 @@ function buildSeedanceFinalPromptValidationContext(
       input.storyboard.storyboard.duration,
       input.boardPlan?.panels.length,
     ),
+    maxImageReferences,
   };
 }
 
@@ -1050,6 +1068,7 @@ export function validateSeedanceFinalVideoPrompt(
   const normalized = prompt.trim();
   const isShotPlanIndustrial = normalized.startsWith('参考图职责：');
   const references = context?.references ?? [];
+  const maxImageReferences = normalizeSeedanceImageReferenceLimit(context?.maxImageReferences);
   const expectedPanelCount = context?.mode && isShotPlanBoardMode(context.mode)
     ? (context.expectedPanelCount ?? 15)
     : 15;
@@ -1074,12 +1093,12 @@ export function validateSeedanceFinalVideoPrompt(
     return { ok: false, reason: '最终视频提示词必须使用“名称【@图片N】”，不要使用英文引用 alias 或 sound beats。' };
   }
   const overflowImageNumbers = extractSeedanceImageReferenceNumbers(normalized)
-    .filter((value) => value > SEEDANCE_IMAGE_REFERENCE_LIMIT);
+    .filter((value) => value > maxImageReferences);
   if (overflowImageNumbers.length > 0) {
     const labels = overflowImageNumbers.slice(0, 4).map((value) => `@图片${value}`).join('、');
     return {
       ok: false,
-      reason: `Seedance 最多只支持 ${SEEDANCE_IMAGE_REFERENCE_LIMIT} 张图，最终词不能引用 ${labels}；主导演板固定为 @图片1，视觉参考只能写 @图片2..@图片${SEEDANCE_IMAGE_REFERENCE_LIMIT}。`,
+      reason: `当前视频模型最多只支持 ${maxImageReferences} 张图，最终词不能引用 ${labels}；主导演板固定为 @图片1，视觉参考只能写 @图片2..@图片${maxImageReferences}。`,
     };
   }
   const hasIntermediateTemplateTrace =
@@ -1232,7 +1251,9 @@ export async function requestSeedanceFinalVideoPrompt(
       buildSeedanceFinalPromptRequestPayload(input, repairHint),
       {
         temperature: repairHint ? 0.18 : 0.2,
-        maxTokens: isShotPlanBoardMode(input.mode) ? 4500 : 4000,
+        maxTokens: normalizeSeedanceImageReferenceLimit(input.maxImageReferences) > 9
+          ? (isShotPlanBoardMode(input.mode) ? 6500 : 6000)
+          : (isShotPlanBoardMode(input.mode) ? 4500 : 4000),
         signal,
         repairHint,
       },
@@ -1273,7 +1294,9 @@ export async function requestSeedanceFinalVideoPromptStream(
       const requestPayload = buildSeedanceFinalPromptRequestPayload(input, repairHint);
       const requestOptions: SeedanceFinalVideoPromptRequestOptions = {
         temperature: repairHint ? 0.18 : 0.2,
-        maxTokens: isShotPlanBoardMode(input.mode) ? 4500 : 4000,
+        maxTokens: normalizeSeedanceImageReferenceLimit(input.maxImageReferences) > 9
+          ? (isShotPlanBoardMode(input.mode) ? 6500 : 6000)
+          : (isShotPlanBoardMode(input.mode) ? 4500 : 4000),
         signal,
         repairHint,
       };

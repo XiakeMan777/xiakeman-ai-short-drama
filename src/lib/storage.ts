@@ -10,6 +10,7 @@
 
 import type { AppState, ApiConfig, ImageApiConfig, VideoApiConfig, TtsApiConfig, MusicApiConfig, StoryboardState, StoryboardInfo, AppStep, ChapterStatus, ScriptAnalysis, Step3Settings, AutoGenerateState, Asset, Step4OutputMode, StoryboardBoardMode, SmartStoryboardPanelCountPreference, StoryboardCameraSegmentPreference, StoryboardBoardStyle, StoryboardDirectorRunMode, GlobalTask, GlobalTaskEvent, GlobalTaskSettings, Step1TaskState, Step3TaskState, ImageSize } from '@/types';
 import { DEFAULT_VOLC_API_BASE, normalizeVolcApiBaseUrl } from '@/lib/volcengineApiClient';
+import { getVolcVideoModelCapabilities, normalizeVolcVideoDuration } from '@/lib/volcengineVideoModels';
 import { ensurePropTrackingIds, normalizeGeneratedPropTrackingDefaults, PROP_DEFAULT_POLICY_VERSION } from '@/lib/propTracking';
 import { DEFAULT_STORYBOARD_BOARD_MODE, STORYBOARD_BOARD_MODES, normalizeStoryboardBoardState } from '@/lib/storyboardBoardState';
 import { normalizeScenePositionBoardState } from '@/lib/scenePositionBoardState';
@@ -188,8 +189,12 @@ export function normalizeVideoApiConfig(raw: Partial<VideoApiConfig> | undefined
   const xyqAgentBaseUrl = raw?.xyqAgentBaseUrl?.trim();
   const seedanceCloudBaseUrl = normalizeSeedanceCloudBaseUrl(raw?.seedanceCloudBaseUrl);
   const legacySeedanceCloudUserId = raw?.seedanceCloudUserId?.trim();
+  const volcModel = raw?.volcModel?.trim() || DEFAULT_VIDEO_API_CONFIG.volcModel;
+  const volcCapabilities = getVolcVideoModelCapabilities(volcModel);
   const rawVideoDuration = Number(raw?.videoDuration) || DEFAULT_VIDEO_API_CONFIG.videoDuration;
-  const videoDuration = normalizeSeedanceServiceDuration(rawVideoDuration);
+  const videoDuration = normalizedBackend === 'volcengine'
+    ? normalizeVolcVideoDuration(rawVideoDuration, DEFAULT_VIDEO_API_CONFIG.videoDuration, volcModel)
+    : normalizeSeedanceServiceDuration(rawVideoDuration);
   const seedanceModel = normalizeVisibleSeedanceServiceModel(raw?.seedanceModel);
   const rawVideoResolution = normalizeSeedanceVideoResolution(raw?.videoResolution, DEFAULT_VIDEO_API_CONFIG.videoResolution);
   const videoResolution = normalizedBackend === 'aliyunbailian' && rawVideoResolution === '480p'
@@ -211,6 +216,7 @@ export function normalizeVideoApiConfig(raw: Partial<VideoApiConfig> | undefined
     videoDuration,
     videoResolution,
     videoRatio: normalizeFrameRatio(raw?.videoRatio ?? DEFAULT_VIDEO_API_CONFIG.videoRatio),
+    volcModel,
     seedanceModel,
     seedanceCloudBaseUrl,
     seedanceCloudLicenseKey: raw?.seedanceCloudLicenseKey?.trim()
@@ -232,7 +238,7 @@ export function normalizeVideoApiConfig(raw: Partial<VideoApiConfig> | undefined
     useBackendVideoJobs: false,
     volcBaseUrl: normalizeVolcApiBaseUrl(raw?.volcBaseUrl),
     volcReferenceAudioUrls: Array.isArray(raw?.volcReferenceAudioUrls)
-      ? raw.volcReferenceAudioUrls.map((url) => url.trim()).filter(Boolean).slice(0, 3)
+      ? raw.volcReferenceAudioUrls.map((url) => url.trim()).filter(Boolean).slice(0, volcCapabilities.maxAudios)
       : DEFAULT_VIDEO_API_CONFIG.volcReferenceAudioUrls,
     aliyunApiKey: raw?.aliyunApiKey?.trim() ?? DEFAULT_VIDEO_API_CONFIG.aliyunApiKey,
     aliyunModel: raw?.aliyunModel?.trim() || DEFAULT_VIDEO_API_CONFIG.aliyunModel,

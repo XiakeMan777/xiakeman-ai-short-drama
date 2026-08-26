@@ -177,14 +177,18 @@ function getDirectorPriorityBoost(
   return Math.max(0, 220 - index * 16);
 }
 
-function buildOmission(ref: ImageReference, reason: VideoImageBudgetOmission['reason']): VideoImageBudgetOmission {
+function buildOmission(
+  ref: ImageReference,
+  reason: VideoImageBudgetOmission['reason'],
+  maxRefs: number,
+): VideoImageBudgetOmission {
   const typeLabel = ref.type === 'character' ? '角色' : ref.type === 'scene' ? '场景' : '道具';
   const messageByReason: Record<VideoImageBudgetOmission['reason'], string> = {
-    'prop-text-safe': `道具「${ref.name}」属于普通小物件/场景陈设，可用文字或场景母版保持一致，本镜不占 Seedance 9 图名额。`,
-    'prop-overflow': `道具「${ref.name}」超出 Seedance 9 图预算，本镜改用文字描述；若它只是小物件，建议 Step3 合并到“小道具合集图”，若是核心剧情道具则拆分分镜或优先保留单独参考图。`,
-    'background-character-overflow': `背景/一扫而过角色「${ref.name}」超出 9 张预算，本镜改用文字描述。`,
-    'scene-overflow': `场景「${ref.name}」超出 Seedance 9 图预算，当前以文字场景描述兜底；普通陈设应尽量烘焙在场景母版里。`,
-    'asset-overflow': `${typeLabel}「${ref.name}」超出 Seedance 9 图预算，本镜改用文字描述。`,
+    'prop-text-safe': `道具「${ref.name}」属于普通小物件/场景陈设，可用文字或场景母版保持一致，本镜不占 ${maxRefs} 图名额。`,
+    'prop-overflow': `道具「${ref.name}」超出 ${maxRefs} 图预算，本镜改用文字描述；若它只是小物件，建议 Step3 合并到“小道具合集图”，若是核心剧情道具则拆分分镜或优先保留单独参考图。`,
+    'background-character-overflow': `背景/一扫而过角色「${ref.name}」超出 ${maxRefs} 张预算，本镜改用文字描述。`,
+    'scene-overflow': `场景「${ref.name}」超出 ${maxRefs} 图预算，当前以文字场景描述兜底；普通陈设应尽量烘焙在场景母版里。`,
+    'asset-overflow': `${typeLabel}「${ref.name}」超出 ${maxRefs} 图预算，本镜改用文字描述。`,
   };
 
   return {
@@ -331,7 +335,7 @@ export function selectVideoImageRefs({
         : entry.ref.type === 'scene'
           ? 'scene-overflow'
           : 'asset-overflow';
-    omittedRefs.push(buildOmission(entry.ref, reason));
+    omittedRefs.push(buildOmission(entry.ref, reason, maxRefs));
   }
 
   const selectedOriginalRefs = uniqueRefs.filter((_ref, index) => keepIndexes.has(index));
@@ -364,7 +368,7 @@ export function selectVideoImageRefs({
       omittedRefs,
       notes: [
         `参考图已压缩为 ${selectedRefs.length}/${maxRefs}：人物 ${selectedTypes.character}，场景 ${selectedTypes.scene}，道具 ${selectedTypes.prop}。`,
-        'Seedance 2.0 全能参考模式最多 9 张图：人物和场景优先保一致性；核心剧情道具优先单独保留；普通小物件优先改用文字、场景母版或 Step3 小道具合集图。',
+        `当前视频模型最多 ${maxRefs} 张图：人物和场景优先保一致性；核心剧情道具优先单独保留；普通小物件优先改用文字、场景母版或 Step3 小道具合集图。`,
         ...(directorBrief ? ['导演参考预算已参与排序：mustKeep 优先保留，textFallback 优先文字兜底。'] : []),
       ],
       warnings,

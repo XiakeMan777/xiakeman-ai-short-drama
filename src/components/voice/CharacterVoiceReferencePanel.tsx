@@ -425,7 +425,7 @@ export function CharacterVoiceReferencePanel({
             </Badge>
           </div>
           <p className="max-w-3xl text-xs leading-5 text-cyan-800/80 dark:text-cyan-100/80">
-            内置声线库会按角色画像推荐候选；试听后点选绑定。开启后 Step4 写入最多 3 位说话角色声线要求，Step5 再按同一顺序提交音频参考。
+            内置声线库会按角色画像推荐候选；试听后点选绑定。开启后 Step4 会按当前视频模型允许的数量写入说话角色声线要求，Step5 再按同一顺序提交音频参考。
           </p>
           {showDetails && voiceCorpusStats.total > 0 && (
             <div className="flex flex-wrap gap-1.5 pt-1 text-[10px] text-cyan-900 dark:text-cyan-100">
